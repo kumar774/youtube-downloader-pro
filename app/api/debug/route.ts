@@ -1,12 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveYtDlpBinary } from "@/lib/binResolver";
 import { ensureNetscapeCookies } from "@/lib/cookieHelper";
+import { resolveInvidiousVideo } from "@/lib/invidiousResolver";
 import cp from "child_process";
 import fs from "fs";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const targetUrl = searchParams.get("url") || "https://www.youtube.com/watch?v=PbC3J_PK3oU";
+  const mode = searchParams.get("mode");
+
+  if (mode === "invidious") {
+    try {
+      const match = targetUrl.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([A-Za-z0-9_-]{11})/);
+      const vidId = match ? match[1] : "PbC3J_PK3oU";
+      const start = Date.now();
+      const info = await resolveInvidiousVideo(vidId);
+      return NextResponse.json({
+        success: !!info,
+        elapsedMs: Date.now() - start,
+        title: info?.title,
+        formatCount: info?.formats?.length || 0,
+        sample: info?.formats?.[0],
+      });
+    } catch (e: any) {
+      return NextResponse.json({ error: e.message, stack: e.stack }, { status: 500 });
+    }
+  }
+
   const clientArg = searchParams.get("client") || "";
   const useCookies = searchParams.get("nocookies") !== "1";
   const potMode = searchParams.get("pot") || "http";

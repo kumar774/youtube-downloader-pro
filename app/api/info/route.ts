@@ -78,51 +78,39 @@ export async function POST(req: NextRequest) {
         extractorArgs: potArg,
       } as any);
     } catch (primaryErr: any) {
-      console.warn("[/api/info] Primary extraction failed, trying mobile client fallback...", primaryErr?.message || primaryErr);
+      console.warn("[/api/info] Primary extraction failed, trying Invidious distributed engine...", primaryErr?.message || primaryErr);
       try {
-        // Fallback 1: Mobile client rotation (Android / iOS / mweb)
-        info = await youtubedl(videoUrl, {
-          ...ytOptions,
-          extractorArgs: [
-            "youtube:player_client=android,ios,mweb",
-            ...potArg
-          ],
-        } as any);
-      } catch (secErr: any) {
-        console.warn("[/api/info] Mobile fallback failed, trying Invidious distributed network fallback...");
-        try {
-          // Fallback 2: Distributed Invidious network (bypasses all datacenter 429 / bot challenges)
-          info = await resolveInvidiousVideo(videoId);
-        } catch (invErr: any) {
-          console.warn("[/api/info] Invidious fallback failed, trying TV client...", invErr?.message);
-        }
+        // High-speed fallback: Distributed Invidious network (bypasses all datacenter 429 / bot challenges in ~1s)
+        info = await resolveInvidiousVideo(videoId);
+      } catch (invErr: any) {
+        console.warn("[/api/info] Invidious fallback error:", invErr?.message);
+      }
 
-        if (!info) {
-          try {
-            // Fallback 3: TV / web_safari client
-            info = await youtubedl(videoUrl, {
-              ...ytOptions,
-              extractorArgs: [
-                "youtube:player_client=tv,web_safari",
-                ...potArg
-              ],
-            } as any);
-          } catch (thirdErr: any) {
-            // Fallback 4: If cookies available, try with cookies as last resort (for age-gated/private)
-            if (cookiesPath) {
-              console.warn("[/api/info] Trying with cookies as last resort...");
-              try {
-                info = await youtubedl(videoUrl, {
-                  ...ytOptions,
-                  cookies: cookiesPath,
-                  extractorArgs: potArg,
-                } as any);
-              } catch {
-                throw primaryErr;
-              }
-            } else {
+      if (!info) {
+        try {
+          // Fallback 2: Mobile client rotation (Android / iOS / mweb)
+          info = await youtubedl(videoUrl, {
+            ...ytOptions,
+            extractorArgs: [
+              "youtube:player_client=android,ios,mweb",
+              ...potArg
+            ],
+          } as any);
+        } catch (secErr: any) {
+          // Fallback 3: If cookies available, try with cookies as last resort (for age-gated/private)
+          if (cookiesPath) {
+            console.warn("[/api/info] Trying with cookies as last resort...");
+            try {
+              info = await youtubedl(videoUrl, {
+                ...ytOptions,
+                cookies: cookiesPath,
+                extractorArgs: potArg,
+              } as any);
+            } catch {
               throw primaryErr;
             }
+          } else {
+            throw primaryErr;
           }
         }
       }
@@ -316,7 +304,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: "Failed to extract video info. Please verify the URL or try again in a moment." },
+      { error: "Failed to extract video info. Please verify the URL or try again in a moment.", details: errMsg },
       { status: 500 }
     );
   }

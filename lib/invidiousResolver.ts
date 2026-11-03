@@ -75,15 +75,26 @@ async function queryInstance(baseUrl: string, videoId: string): Promise<any | nu
 }
 
 /**
- * Main resolver function: queries instances in fast batches
+ * Main resolver function: queries proven fast instance first, then fallbacks
  */
 export async function resolveInvidiousVideo(videoId: string): Promise<any | null> {
+  // 1. Instant check with primary high-speed instance
+  try {
+    const primaryData = await queryInstance("https://yt.chocolatemoo53.com", videoId);
+    if (primaryData && (primaryData.formatStreams || primaryData.adaptiveFormats)) {
+      return mapInvidiousToYtDlp(primaryData, videoId);
+    }
+  } catch (e: any) {
+    console.warn("[invidiousResolver] Primary instance failed, querying fallback pool...", e?.message);
+  }
+
+  // 2. Fallback pool
   const instances = await refreshHealthyInstances();
-  
-  // Try top instances in fast parallel batches of 2-3
+  const fallbackList = instances.filter((u) => !u.includes("chocolatemoo53"));
+
   const batchSize = 3;
-  for (let i = 0; i < Math.min(instances.length, 9); i += batchSize) {
-    const batch = instances.slice(i, i + batchSize);
+  for (let i = 0; i < Math.min(fallbackList.length, 9); i += batchSize) {
+    const batch = fallbackList.slice(i, i + batchSize);
     try {
       const results = await Promise.allSettled(
         batch.map((inst) => queryInstance(inst, videoId))
