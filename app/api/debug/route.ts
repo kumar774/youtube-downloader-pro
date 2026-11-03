@@ -7,9 +7,10 @@ import fs from "fs";
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const targetUrl = searchParams.get("url") || "https://www.youtube.com/watch?v=PbC3J_PK3oU";
-  const clientArg = searchParams.get("client") || "mweb,tv,web_safari";
+  const clientArg = searchParams.get("client") || "";
   const useCookies = searchParams.get("nocookies") !== "1";
-  const potMode = searchParams.get("pot") || "cli";
+  const potMode = searchParams.get("pot") || "http";
+  const skipWebpage = searchParams.get("skip_webpage") === "1";
 
   const binPath = resolveYtDlpBinary();
   const cookiesPath = useCookies ? ensureNetscapeCookies() : null;
@@ -46,14 +47,20 @@ export async function GET(req: NextRequest) {
       "/etc/yt-dlp/plugins/bgutil",
       "--js-runtimes",
       process.platform === "linux" ? "deno" : "node",
-      "--extractor-args",
-      `youtube:player_client=${clientArg};player_skip=webpage`,
     ];
+
+    if (clientArg || skipWebpage) {
+      let ytArg = "";
+      if (clientArg) ytArg += `player_client=${clientArg}`;
+      if (skipWebpage) ytArg += (ytArg ? ";" : "") + "player_skip=webpage";
+      args.push("--extractor-args", `youtube:${ytArg}`);
+    }
 
     if (potMode === "cli") {
       args.push("--extractor-args", "youtubepot-bgutilcli:cli_path=/usr/local/bin/bgutil-pot");
     } else {
       args.push("--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416");
+      args.push("--extractor-args", "youtubepot-bgutilcli:cli_path=/usr/local/bin/bgutil-pot");
     }
 
     if (cookiesPath) {

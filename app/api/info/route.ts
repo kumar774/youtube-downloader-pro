@@ -74,30 +74,28 @@ export async function POST(req: NextRequest) {
     ] : [];
 
     try {
+      // Primary: allow yt-dlp default client resolution with webpage loaded for full BotGuard POT generation
       info = await youtubedl(videoUrl, {
         ...ytOptions,
-        extractorArgs: [
-          "youtube:player_client=mweb,tv,web_safari;player_skip=webpage",
-          ...potArg
-        ],
+        extractorArgs: potArg,
       } as any);
     } catch (primaryErr: any) {
-      console.warn("[/api/info] Primary extraction failed, trying iOS/Android client fallback with player_skip=webpage...");
+      console.warn("[/api/info] Primary extraction failed, trying iOS/Android client fallback...", primaryErr?.message || primaryErr);
       try {
         info = await youtubedl(videoUrl, {
           ...ytOptions,
           extractorArgs: [
-            "youtube:player_client=ios,android,tv;player_skip=webpage",
+            "youtube:player_client=ios,android,mweb",
             ...potArg
           ],
         } as any);
       } catch (secErr: any) {
-        console.warn("[/api/info] Second fallback failed, trying web client...");
+        console.warn("[/api/info] Second fallback failed, trying tv/web_safari client...");
         try {
           info = await youtubedl(videoUrl, {
             ...ytOptions,
             extractorArgs: [
-              "youtube:player_client=web;player_skip=webpage",
+              "youtube:player_client=tv,web_safari",
               ...potArg
             ],
           } as any);
