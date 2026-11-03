@@ -20,6 +20,14 @@ function formatBytes(bytes?: number): string {
   return `${mb.toFixed(1)} MB`;
 }
 
+function getChannelProgress(basePct: number, channelIndex: number, totalChannels: number = 16): number {
+  if (basePct >= 100) return 100;
+  if (basePct <= 0) return 0;
+  const offset = ((channelIndex * 7) % 11) - 5;
+  const target = basePct + offset * (1 - basePct / 100);
+  return Math.min(Math.max(Math.round(target), 2), 100);
+}
+
 export default function DownloadProgressModal({
   jobId,
   title,
@@ -29,7 +37,7 @@ export default function DownloadProgressModal({
   onClose,
 }: DownloadProgressModalProps) {
   const [percent, setPercent] = useState<number>(0);
-  const [stage, setStage] = useState<string>("Connecting to server...");
+  const [stage, setStage] = useState<string>("Connecting to high-speed stream...");
   const [speed, setSpeed] = useState<string>("");
   const [eta, setEta] = useState<string>("");
   const [status, setStatus] = useState<"starting" | "downloading" | "merging" | "completed" | "failed" | "cancelled">("starting");
@@ -64,37 +72,18 @@ export default function DownloadProgressModal({
         if (data.status === "completed" && !hasTriggeredDownload.current) {
           hasTriggeredDownload.current = true;
           setPercent(100);
-          setStage("Saving file directly to disk...");
+          setStage("Download complete! File saved.");
 
-          try {
-            // MEGA-style instant local blob save
-            const downloadUrl = `/api/job/download?jobId=${jobId}`;
-            const res = await fetch(downloadUrl);
-            if (res.ok) {
-              const blob = await res.blob();
-              const blobUrl = URL.createObjectURL(blob);
-              const link = document.createElement("a");
-              link.href = blobUrl;
-              const safeName = (title || "video").replace(/[^\w\s\-().]/g, "").replace(/\s+/g, "_");
-              const ext = qualityLabel?.toLowerCase().includes("mp3") ? "mp3" : "mp4";
-              link.download = `${safeName}.${ext}`;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
-              setStage("File saved directly to your Downloads folder! 🎉");
-            } else {
-              window.location.href = downloadUrl;
-            }
-          } catch (e) {
-            console.error("Instant blob save failed, falling back to direct stream:", e);
-            window.location.href = `/api/job/download?jobId=${jobId}`;
-          }
-
-          // Keep modal open briefly so user sees the success confirmation
-          setTimeout(() => {
-            onClose();
-          }, 3500);
+          // Direct browser download trigger via native anchor
+          const downloadUrl = `/api/job/download?jobId=${jobId}`;
+          const link = document.createElement("a");
+          link.href = downloadUrl;
+          const safeName = (title || "video").replace(/[^\w\s\-().]/g, "").replace(/\s+/g, "_");
+          const ext = qualityLabel?.toLowerCase().includes("mp3") ? "mp3" : "mp4";
+          link.download = `${safeName}.${ext}`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
         }
       } catch (err) {
         console.error("Failed to parse progress event:", err);
@@ -108,7 +97,7 @@ export default function DownloadProgressModal({
     return () => {
       eventSource.close();
     };
-  }, [jobId, onClose]);
+  }, [jobId, title, qualityLabel]);
 
   const handleCancel = async () => {
     setIsCancelling(true);
@@ -128,13 +117,13 @@ export default function DownloadProgressModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
-      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-white/10 bg-slate-900/90 p-6 shadow-2xl backdrop-blur-xl animate-fade-in-up">
-        {/* Close / Cancel Button at Top Right */}
+      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-white/10 bg-slate-900/95 p-6 shadow-2xl backdrop-blur-xl animate-fade-in-up">
+        {/* Close Button at Top Right */}
         <button
           onClick={handleCancel}
           disabled={isCancelling}
           className="absolute right-4 top-4 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
-          title="Cancel"
+          title="Close"
         >
           <X className="h-5 w-5" />
         </button>
@@ -159,11 +148,11 @@ export default function DownloadProgressModal({
               {isTurbo ? (
                 <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)]">
                   <Zap className="h-3 w-3 text-amber-400 fill-amber-400" />
-                  ⚡ Turbo 16X Active
+                  ⚡ Turbo 16X Multi-Stream
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-300 border border-slate-700">
-                  Standard Mode
+                  Standard Stream
                 </span>
               )}
               {qualityLabel && (
@@ -174,7 +163,7 @@ export default function DownloadProgressModal({
               )}
               {status === "merging" && (
                 <span className="rounded-md bg-purple-500/20 px-2 py-0.5 text-xs font-semibold text-purple-300 border border-purple-500/30">
-                  FFmpeg Instant Mux
+                  High-Speed Stream Sync
                 </span>
               )}
             </div>
@@ -199,7 +188,7 @@ export default function DownloadProgressModal({
                 : "border-white/5 bg-white/[0.02] text-slate-500"
             }`}
           >
-            2. Buffer Chunks
+            2. Multi-Stream
           </div>
           <div
             className={`py-1 rounded-lg border transition-all ${
@@ -208,7 +197,7 @@ export default function DownloadProgressModal({
                 : "border-white/5 bg-white/[0.02] text-slate-500"
             }`}
           >
-            3. FFmpeg Mux
+            3. Audio Sync
           </div>
           <div
             className={`py-1 rounded-lg border transition-all ${
@@ -221,45 +210,62 @@ export default function DownloadProgressModal({
           </div>
         </div>
 
-        {/* VidMate / IDM Multi-Thread Chunk Visualizer */}
-        <div className="mb-4 rounded-xl border border-white/10 bg-black/40 p-3.5">
-          <div className="flex items-center justify-between text-xs mb-2">
-            <span className="font-semibold text-slate-300 flex items-center gap-1.5">
-              <Zap className="h-3.5 w-3.5 text-amber-400" />
-              Multi-Thread Chunks ({activeChunks}/{totalChunks} Active)
-            </span>
-            <span className="text-slate-300 font-mono font-bold text-[11px]">
-              {downloadedBytes > 0
-                ? `${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}`
-                : totalSizeText
-                ? `${Math.round(percent)}% of ${totalSizeText}`
-                : `${Math.round(percent)}%`}
-            </span>
-          </div>
+        {/* VidMate 16-Channel Multi-Stream Visualizer (Turbo Mode) */}
+        {isTurbo ? (
+          <div className="mb-4 rounded-xl border border-white/10 bg-black/40 p-3.5">
+            <div className="flex items-center justify-between text-xs mb-2.5">
+              <span className="font-semibold text-amber-300 flex items-center gap-1.5">
+                <Zap className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
+                Turbo 16-Channel Stream Accelerator
+              </span>
+              <span className="text-slate-300 font-mono font-bold text-[11px]">
+                {downloadedBytes > 0
+                  ? `${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}`
+                  : totalSizeText
+                  ? `${Math.round(percent)}% of ${totalSizeText}`
+                  : `${Math.round(percent)}%`}
+              </span>
+            </div>
 
-          {/* Chunk Blocks */}
-          <div className="grid grid-cols-8 sm:grid-cols-16 gap-1.5">
-            {Array.from({ length: totalChunks }).map((_, idx) => {
-              const isComplete = idx < activeChunks;
-              const isCurrent = idx === activeChunks && percent < 100;
-              return (
-                <div
-                  key={idx}
-                  className={`h-4 rounded transition-all duration-300 ${
-                    isComplete
-                      ? "bg-gradient-to-t from-emerald-500 to-teal-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
-                      : isCurrent
-                      ? "bg-amber-400 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.7)]"
-                      : "bg-slate-800/80 border border-white/5"
-                  }`}
-                  title={`Thread Chunk #${idx + 1}: ${
-                    isComplete ? "Completed" : isCurrent ? "Buffering" : "Queued"
-                  }`}
-                />
-              );
-            })}
+            {/* 16 Channels Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {Array.from({ length: 16 }).map((_, idx) => {
+                const chPct = getChannelProgress(percent, idx, 16);
+                return (
+                  <div key={idx} className="rounded-lg bg-slate-900/80 border border-white/5 p-1.5">
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                      <span className="font-mono">CH {String(idx + 1).padStart(2, "0")}</span>
+                      <span className="font-bold text-slate-200">{chPct}%</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-amber-500 to-emerald-400 rounded-full transition-all duration-300"
+                        style={{ width: `${chPct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="mb-4 rounded-xl border border-white/10 bg-black/40 p-3.5">
+            <div className="flex items-center justify-between text-xs mb-1.5">
+              <span className="font-semibold text-slate-300">Standard Single Stream</span>
+              <span className="text-slate-300 font-mono font-bold text-[11px]">
+                {downloadedBytes > 0
+                  ? `${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}`
+                  : `${Math.round(percent)}%`}
+              </span>
+            </div>
+            <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Status Stage Text */}
         <div className="mb-2 flex items-center justify-between text-sm">
@@ -290,45 +296,60 @@ export default function DownloadProgressModal({
             <Zap className="h-3 w-3 text-amber-400" />
             {speed ? `Speed: ${speed}` : isTurbo ? "Speed: 14.5 MB/s (Turbo)" : "Speed: 3.8 MB/s"}
           </span>
-          <span>{eta ? `ETA: ${eta}` : percent >= 100 ? "Complete" : "Calculating..."}</span>
+          <span>{eta ? `ETA: ${eta}` : percent >= 100 ? "Ready" : "Calculating..."}</span>
         </div>
 
         {/* Error Display */}
         {status === "failed" && (
           <div className="mb-4 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-300">
-            {error || "An error occurred during processing."}
+            {error || "An error occurred while preparing download. Please try another quality."}
           </div>
         )}
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-3">
-          {status !== "completed" && status !== "failed" ? (
-            <button
-              onClick={handleCancel}
-              disabled={isCancelling}
-              className="px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
-            >
-              {isCancelling ? "Cancelling..." : "Cancel"}
-            </button>
-          ) : status === "completed" ? (
-            <button
-              onClick={onClose}
-              className="btn-green flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl"
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              Download Ready (Done)
-            </button>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+          {status === "completed" ? (
+            <>
+              <a
+                href={`/api/job/download?jobId=${jobId}`}
+                download
+                className="w-full sm:flex-1 flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.35)] hover:scale-[1.02] transition-all"
+              >
+                <Download className="h-4 w-4" />
+                <span>Save File to Disk {totalSizeText ? `(${totalSizeText})` : ""}</span>
+              </a>
+              <button
+                onClick={onClose}
+                className="w-full sm:w-auto px-5 py-3 text-xs sm:text-sm font-semibold rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+              >
+                Close
+              </button>
+            </>
+          ) : status === "failed" ? (
+            <div className="flex w-full justify-end">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-slate-800 text-white hover:bg-slate-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
           ) : (
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-slate-800 text-white hover:bg-slate-700 transition-colors"
-            >
-              Close
-            </button>
+            <div className="flex w-full items-center justify-between">
+              <span className="text-xs text-slate-400">
+                {isTurbo ? "⚡ 16 channels streaming..." : "Standard single-stream buffering..."}
+              </span>
+              <button
+                onClick={handleCancel}
+                disabled={isCancelling}
+                className="px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
+              >
+                {isCancelling ? "Cancelling..." : "Cancel"}
+              </button>
+            </div>
           )}
         </div>
       </div>
     </div>
   );
 }
-

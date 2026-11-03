@@ -436,7 +436,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
                   Cinema & Ultra HD (1080p to 8K Auto-Merged) 🎬
                 </h3>
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                  FFmpeg Muxer
+                  Full Audio Sync
                 </span>
               </div>
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
@@ -726,8 +726,8 @@ function FormatRow({
             disabled={disabled}
             title={
               turboMode
-                ? "High-Speed Turbo FFmpeg Merge"
-                : "Standard Speed FFmpeg Merge"
+                ? "High-Speed Turbo Audio Merge"
+                : "Standard Audio Merge"
             }
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${mergeButtonGradient} disabled:opacity-50`}
           >

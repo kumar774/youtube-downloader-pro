@@ -199,7 +199,7 @@ export async function POST(req: NextRequest) {
           } else if (pct < 75) {
             stageText = type === "convert" ? `Encoding MP3 with Studio ID3 tags (${pct}%)...` : `Processing high-definition stream chunk ${currentChunk}/${totalChunks}...`;
           } else {
-            stageText = type === "convert" ? `Finalizing MP3 Studio track (${pct}%)...` : `Lossless FFmpeg container muxing (${pct}%)...`;
+            stageText = type === "convert" ? `Finalizing MP3 Studio track (${pct}%)...` : `Lossless high-quality container sync (${pct}%)...`;
           }
 
           updateJob(jobId, {
@@ -230,21 +230,21 @@ export async function POST(req: NextRequest) {
             stage: "Ready for download!",
           });
         } else {
-          console.error(`[Job ${jobId}] FFmpeg failed with exit code ${code}:`, stderrOutput);
+          console.error(`[Job ${jobId}] Process failed with exit code ${code}:`, stderrOutput);
           updateJob(jobId, {
             status: "failed",
-            error: stderrOutput.slice(-300) || `FFmpeg process exited with code ${code}`,
+            error: "Could not complete stream processing. Please try a different quality or standard mode.",
             stage: "Processing failed",
           });
         }
       });
 
       child.on("error", (err: Error) => {
-        console.error(`[Job ${jobId}] FFmpeg error:`, err);
+        console.error(`[Job ${jobId}] Process error:`, err);
         updateJob(jobId, {
           status: "failed",
-          error: err.message,
-          stage: "FFmpeg process error",
+          error: "Stream processing error. Please try again.",
+          stage: "Processing stream error",
         });
       });
 
@@ -366,13 +366,13 @@ export async function POST(req: NextRequest) {
           updateJob(jobId, {
             status: "merging",
             percent: 95,
-            stage: "Merging video & audio with FFmpeg...",
+            stage: "Synchronizing video and audio tracks...",
           });
         } else if (line.includes("[ExtractAudio]")) {
           updateJob(jobId, {
             status: "merging",
             percent: 92,
-            stage: "Converting audio to MP3 with FFmpeg...",
+            stage: "Encoding audio to MP3 Studio track...",
           });
         }
       }
