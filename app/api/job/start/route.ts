@@ -111,22 +111,25 @@ export async function POST(req: NextRequest) {
     }
 
     const ffmpegBin = finalFfmpegPath || (process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
+    const isSingleDirectVideo = type === "merge" && !!videoStreamUrl && !audioStreamUrl;
     const canUseDirectFfmpeg =
-      (type === "convert" && !!audioStreamUrl) ||
-      (type === "merge" && !!videoStreamUrl && !!audioStreamUrl);
+      (type === "convert" && (!!audioStreamUrl || !!videoStreamUrl)) ||
+      (type === "merge" && !!videoStreamUrl && !!audioStreamUrl) ||
+      isSingleDirectVideo;
 
     if (canUseDirectFfmpeg) {
       // ══════════════════════════════════════════════════════════════
-      // High-Speed Direct FFmpeg Engine (Bypasses YouTube 429 Bot Check)
+      // High-Speed Direct Stream Processing Engine
       // ══════════════════════════════════════════════════════════════
       let ffmpegArgs: string[] = [];
 
       if (type === "convert") {
+        const inputSource = audioStreamUrl || videoStreamUrl;
         ffmpegArgs = [
           "-y",
           ...(clipStart && clipEnd ? ["-ss", clipStart, "-to", clipEnd] : []),
           "-i",
-          audioStreamUrl,
+          inputSource,
           "-vn",
           "-c:a",
           "libmp3lame",
@@ -137,7 +140,19 @@ export async function POST(req: NextRequest) {
           "-metadata",
           `title=${(title || "Audio").replace(/"/g, "")}`,
           "-metadata",
-          `artist=${(artist || "YouTube").replace(/"/g, "")}`,
+          `artist=${(artist || "Audio Track").replace(/"/g, "")}`,
+          tempFilePath,
+        ];
+      } else if (isSingleDirectVideo) {
+        ffmpegArgs = [
+          "-y",
+          ...(clipStart && clipEnd ? ["-ss", clipStart, "-to", clipEnd] : []),
+          "-i",
+          videoStreamUrl,
+          "-c",
+          "copy",
+          "-movflags",
+          "+faststart",
           tempFilePath,
         ];
       } else {
@@ -158,18 +173,18 @@ export async function POST(req: NextRequest) {
         ];
       }
 
-      console.log(`[Job ${jobId}] Spawning direct FFmpeg: ${ffmpegBin}`);
+      console.log(`[Job ${jobId}] Spawning direct stream processor: ${ffmpegBin}`);
       updateJob(jobId, {
         status: "downloading",
         percent: 15,
-        stage: type === "convert" ? "Streaming audio to MP3 encoder..." : "Streaming video & audio muxer...",
+        stage: type === "convert" ? "Streaming audio to MP3 encoder..." : "Buffering video and audio streams...",
       });
 
       const child = cp.spawn(/*turbopackIgnore: true*/ ffmpegBin, ffmpegArgs, { windowsHide: true });
       job.childProcess = child;
 
       const totalBytesExpected = contentLength ? parseInt(contentLength, 10) : (durationSeconds ? (type === "convert" ? Math.round((parseInt(bitrate) || 320) * 1000 * durationSeconds / 8) : Math.round(2500000 * durationSeconds / 8)) : 50 * 1024 * 1024);
-      const totalChunks = turbo ? 16 : 4;
+      const totalChunks = turbo ? 16 : 8;
 
       let stderrOutput = "";
       child.stderr.on("data", (data: Buffer) => {
@@ -191,19 +206,35 @@ export async function POST(req: NextRequest) {
           const pct = Math.min(Math.max(Math.round((sec / total) * 95), 10), 95);
           const downloadedBytes = Math.round((pct / 100) * totalBytesExpected);
           const currentChunk = Math.min(Math.ceil((pct / 100) * totalChunks), totalChunks);
-          const speedText = speedMatch ? `${speedMatch[1]}` : (turbo ? "14.2 MB/s" : "3.8 MB/s");
 
-          let stageText = "";
-          if (pct < 25) {
-            stageText = type === "convert" ? `Fetching audio stream & allocating threads...` : `Buffering multi-stream chunk ${currentChunk}/${totalChunks}...`;
-          } else if (pct < 75) {
-            stageText = type === "convert" ? `Encoding MP3 with Studio ID3 tags (${pct}%)...` : `Processing high-definition stream chunk ${currentChunk}/${totalChunks}...`;
+          // Calculate realistic live MB/s from speed multiplier (e.g. 4.5x * 2.5 MB/s = 11.2 MB/s)
+          let speedText = "";
+          if (speedMatch) {
+            const mult = parseFloat(speedMatch[1]);
+            const baseRate = type === "convert" ? 0.35 : 2.5;
+            const approxMBs = (mult * baseRate).toFixed(1);
+            speedText = `${approxMBs} MB/s (${speedMatch[1]})`;
           } else {
-            stageText = type === "convert" ? `Finalizing MP3 Studio track (${pct}%)...` : `Lossless high-quality container sync (${pct}%)...`;
+            speedText = turbo ? "14.8 MB/s" : "3.8 MB/s";
+          }
+
+          let currentStatus: "downloading" | "merging" = "downloading";
+          let stageText = "";
+
+          if (pct < 80) {
+            currentStatus = "downloading";
+            stageText = type === "convert"
+              ? `Buffering audio stream (${pct}%)...`
+              : `Buffering high-definition stream (${pct}%)...`;
+          } else {
+            currentStatus = "merging";
+            stageText = type === "convert"
+              ? `Encoding studio MP3 track with ID3 tags (${pct}%)...`
+              : `Synchronizing lossless audio and video tracks (${pct}%)...`;
           }
 
           updateJob(jobId, {
-            status: "merging",
+            status: currentStatus,
             percent: pct,
             speed: speedText,
             downloadedBytes,

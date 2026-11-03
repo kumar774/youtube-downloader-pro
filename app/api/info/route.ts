@@ -233,12 +233,35 @@ export async function POST(req: NextRequest) {
       })
     );
 
+    const durationSec = typeof info.duration === "number" ? info.duration : parseInt(info.duration || "0", 10) || 240;
+
+    function estimateVideoBytes(h: number, is60: boolean, dur: number): number {
+      let kbps = 2000;
+      if (h >= 4320) kbps = is60 ? 55000 : 40000;
+      else if (h >= 2160) kbps = is60 ? 28000 : 20000;
+      else if (h >= 1440) kbps = is60 ? 14000 : 10000;
+      else if (h >= 1080) kbps = is60 ? 7500 : 5000;
+      else if (h >= 720) kbps = is60 ? 4000 : 2500;
+      else if (h >= 480) kbps = 1200;
+      else if (h >= 360) kbps = 700;
+      else if (h >= 240) kbps = 400;
+      else kbps = 200;
+
+      return Math.round((kbps * 1000 * dur) / 8);
+    }
+
     candidatesByLabel.forEach((videoFormat, label) => {
       if (bestAudio) {
-        const vSize = parseInt(videoFormat.contentLength || "0", 10);
-        const aSize = parseInt(bestAudio.contentLength || "0", 10);
         const resMatch = videoFormat.qualityLabel.match(/(\d+)p/i) || videoFormat.qualityLabel.match(/^(\d+)/);
         const height = resMatch ? parseInt(resMatch[1], 10) : 0;
+        const isHighFps = videoFormat.qualityLabel.includes("60");
+
+        let vSize = parseInt(videoFormat.contentLength || "0", 10);
+        if (vSize <= 0) {
+          vSize = estimateVideoBytes(height, isHighFps, durationSec);
+        }
+
+        const aSize = parseInt(bestAudio.contentLength || "0", 10) || Math.round(160000 * durationSec / 8);
         
         const mergedItem = {
           itag: videoFormat.itag,
@@ -258,7 +281,6 @@ export async function POST(req: NextRequest) {
         if (height >= 1080) {
           cinemaMerged.push(mergedItem);
         } else {
-          const isHighFps = videoFormat.qualityLabel.includes("60");
           if (!directHeights.has(height) || isHighFps) {
             standardMerged.push(mergedItem);
           }

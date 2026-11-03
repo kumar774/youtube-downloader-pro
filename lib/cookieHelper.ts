@@ -81,3 +81,50 @@ export function ensureNetscapeCookies(): string | null {
     return fs.existsSync(tmpCookiesPath) ? tmpCookiesPath : null;
   }
 }
+
+/**
+ * Ensures Instagram cookies are formatted for yt-dlp.
+ * Supports INSTAGRAM_COOKIES or INSTAGRAM_SESSION_ID.
+ */
+export function ensureInstagramCookies(): string | null {
+  const tmpCookiesPath = path.join(os.tmpdir(), "ig_cookies.txt");
+  const localCookiesPath = path.resolve(process.cwd(), "instagram_cookies.txt");
+
+  if (process.env.INSTAGRAM_SESSION_ID) {
+    const sessionId = process.env.INSTAGRAM_SESSION_ID.trim();
+    const netscape = `# Netscape HTTP Cookie File\n.instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\t${sessionId}\n`;
+    try {
+      fs.writeFileSync(tmpCookiesPath, netscape, "utf8");
+      return tmpCookiesPath;
+    } catch (e) {
+      console.warn("[cookieHelper] Failed to write ig_cookies.txt:", e);
+    }
+  }
+
+  let rawContent: string | null = null;
+  if (process.env.INSTAGRAM_COOKIES) {
+    let envVal = process.env.INSTAGRAM_COOKIES.trim();
+    try {
+      const decoded = Buffer.from(envVal, "base64").toString("utf8");
+      if (decoded.includes("instagram.com") || decoded.startsWith("# Netscape")) {
+        envVal = decoded;
+      }
+    } catch {}
+    rawContent = envVal;
+  } else if (fs.existsSync(localCookiesPath)) {
+    try {
+      rawContent = fs.readFileSync(localCookiesPath, "utf8").trim();
+    } catch (e) {
+      console.warn("[cookieHelper] Failed to read instagram_cookies.txt:", e);
+    }
+  }
+
+  if (!rawContent) return null;
+
+  try {
+    fs.writeFileSync(tmpCookiesPath, rawContent, "utf8");
+    return tmpCookiesPath;
+  } catch {
+    return null;
+  }
+}
