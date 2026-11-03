@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
         "--no-warnings",
         "--newline",
         "--js-runtimes",
-        "node",
+        process.platform === "linux" ? "deno" : "node",
         "--postprocessor-args",
         `ffmpeg:-id3v2_version 3 -metadata title="${(title || "Audio").replace(/"/g, "")}" -metadata artist="${(artist || "YouTube").replace(/"/g, "")}"`,
       ];
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
         "--no-warnings",
         "--newline",
         "--js-runtimes",
-        "node",
+        process.platform === "linux" ? "deno" : "node",
         "--postprocessor-args",
         "ffmpeg:-c copy -threads 0",
       ];

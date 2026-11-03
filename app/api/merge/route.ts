@@ -3,18 +3,10 @@ import { create } from "youtube-dl-exec";
 import path from "path";
 import fs from "fs";
 import os from "os";
-// Find dynamic ffmpeg path
-const ffmpegExt = process.platform === "win32" ? ".exe" : "";
-const resolvedFfmpegPath = path.resolve(
-  process.cwd(),
-  "node_modules/ffmpeg-static",
-  `ffmpeg${ffmpegExt}`
-);
-const finalFfmpegPath = fs.existsSync(resolvedFfmpegPath) ? resolvedFfmpegPath : undefined;
+import { resolveYtDlpBinary, resolveFfmpegBinary } from "@/lib/binResolver";
 
-// Find absolute path to yt-dlp binary
-const ext = process.platform === 'win32' ? '.exe' : '';
-const binPath = path.resolve(process.cwd(), `node_modules/youtube-dl-exec/bin/yt-dlp${ext}`);
+const finalFfmpegPath = resolveFfmpegBinary();
+const binPath = resolveYtDlpBinary();
 const youtubedl = create(binPath);
 
 export async function GET(req: NextRequest) {
@@ -41,7 +33,7 @@ export async function GET(req: NextRequest) {
       mergeOutputFormat: 'mp4',
       noWarnings: true,
       ffmpegLocation: finalFfmpegPath || undefined,
-      jsRuntimes: 'node',
+      jsRuntimes: process.platform === "linux" ? "deno" : "node",
     });
 
     if (!fs.existsSync(tempFilePath)) {
