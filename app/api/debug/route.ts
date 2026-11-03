@@ -20,12 +20,13 @@ export async function GET(req: NextRequest) {
     cookieContent = fs.readFileSync(cookiesPath, "utf8").substring(0, 300);
   }
 
-  let bgutilDir: string[] = [];
+  let potServerStatus = "unknown";
   try {
-    if (fs.existsSync('/opt/bgutil')) {
-      bgutilDir = fs.readdirSync('/opt/bgutil');
-    }
-  } catch {}
+    const potRes = await fetch("http://127.0.0.1:4416", { signal: AbortSignal.timeout(1000) });
+    potServerStatus = `HTTP ${potRes.status}`;
+  } catch (e: any) {
+    potServerStatus = `unreachable: ${e.message}`;
+  }
 
   let bgutilLog = "";
   try {
@@ -57,7 +58,7 @@ export async function GET(req: NextRequest) {
           binPath,
           targetUrl,
           clientArg,
-          bgutilDir,
+          potServerStatus,
           bgutilLog,
           cookiesUsed: !!cookiesPath,
           exitCode: error?.code,

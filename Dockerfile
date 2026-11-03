@@ -1,7 +1,4 @@
-# Pull official POT provider image for YouTube BotGuard PO Token solving
-FROM brainicism/bgutil-ytdlp-pot-provider:latest AS bgutil-source
-
-# Multi-stage production build for Next.js with yt-dlp, ffmpeg, Deno, and POT provider
+# Multi-stage production build for Next.js with yt-dlp, ffmpeg, Deno, and Rust POT provider
 FROM node:20-bookworm-slim AS base
 
 # Install system dependencies: Python3, python3-pip, ffmpeg, curl, unzip
@@ -25,6 +22,10 @@ RUN curl -fsSL https://deno.land/install.sh | sh -s -- -y \
 # Install latest yt-dlp globally
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
     && chmod a+rx /usr/local/bin/yt-dlp
+
+# Install standalone Rust POT provider binary (bgutil-pot)
+RUN curl -L https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-pot-linux-x86_64 -o /usr/local/bin/bgutil-pot \
+    && chmod a+rx /usr/local/bin/bgutil-pot
 
 # Global configuration for yt-dlp to solve BotGuard challenges via bgutil POT provider
 RUN echo '--extractor-args "youtube:player-client=mweb,tv,web_safari;player_skip=webpage"' >> /etc/yt-dlp.conf \
@@ -55,9 +56,6 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
-
-# Copy bgutil POT provider
-COPY --from=bgutil-source /app /opt/bgutil
 
 # Copy built application and node_modules
 COPY --from=builder /app/public ./public
