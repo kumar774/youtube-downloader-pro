@@ -43,6 +43,8 @@ export async function GET(req: NextRequest) {
       "--dump-json",
       "--verbose",
       "--no-check-certificates",
+      "--impersonate",
+      "chrome",
       "--plugin-dirs",
       "/etc/yt-dlp/plugins/bgutil",
       "--js-runtimes",

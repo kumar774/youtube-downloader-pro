@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
       noWarnings: true,
       noCheckCertificates: true,
       preferFreeFormats: true,
+      impersonate: "chrome",
       jsRuntimes: process.platform === "linux" ? "deno" : "node",
     };
 
@@ -62,11 +63,7 @@ export async function POST(req: NextRequest) {
       ytOptions.pluginDirs = "/etc/yt-dlp/plugins/bgutil";
     }
 
-    if (cookiesPath) {
-      ytOptions.cookies = cookiesPath;
-    }
-
-    // Extract using youtube-dl-exec with automatic client fallback and POT solver
+    // Extract using youtube-dl-exec with Chrome TLS impersonation and client fallback
     let info: any = null;
     const potArg = process.platform === "linux" ? [
       "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
@@ -74,24 +71,26 @@ export async function POST(req: NextRequest) {
     ] : [];
 
     try {
-      // Primary: allow yt-dlp default client resolution with webpage loaded for full BotGuard POT generation
+      // Primary: Chrome browser TLS impersonation with standard player clients
       info = await youtubedl(videoUrl, {
         ...ytOptions,
         extractorArgs: potArg,
       } as any);
     } catch (primaryErr: any) {
-      console.warn("[/api/info] Primary extraction failed, trying iOS/Android client fallback...", primaryErr?.message || primaryErr);
+      console.warn("[/api/info] Primary extraction failed, trying mobile client fallback...", primaryErr?.message || primaryErr);
       try {
+        // Fallback 1: Mobile client rotation (Android / iOS / mweb)
         info = await youtubedl(videoUrl, {
           ...ytOptions,
           extractorArgs: [
-            "youtube:player_client=ios,android,mweb",
+            "youtube:player_client=android,ios,mweb",
             ...potArg
           ],
         } as any);
       } catch (secErr: any) {
         console.warn("[/api/info] Second fallback failed, trying tv/web_safari client...");
         try {
+          // Fallback 2: TV / web_safari client
           info = await youtubedl(videoUrl, {
             ...ytOptions,
             extractorArgs: [
@@ -99,8 +98,22 @@ export async function POST(req: NextRequest) {
               ...potArg
             ],
           } as any);
-        } catch {
-          throw primaryErr;
+        } catch (thirdErr: any) {
+          // Fallback 3: If cookies available, try with cookies as last resort (for age-gated/private)
+          if (cookiesPath) {
+            console.warn("[/api/info] Trying with cookies as last resort...");
+            try {
+              info = await youtubedl(videoUrl, {
+                ...ytOptions,
+                cookies: cookiesPath,
+                extractorArgs: potArg,
+              } as any);
+            } catch {
+              throw primaryErr;
+            }
+          } else {
+            throw primaryErr;
+          }
         }
       }
     }
