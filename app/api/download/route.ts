@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { create } from "youtube-dl-exec";
 import { resolveYtDlpBinary } from "@/lib/binResolver";
+import { resolveInvidiousVideo } from "@/lib/invidiousResolver";
 import path from "path";
 
 // Find absolute path to yt-dlp binary (cross-platform Linux/Docker + Windows)
 const binPath = resolveYtDlpBinary();
 const youtubedl = create(binPath);
+
+function extractVideoId(url: string): string | null {
+  const match = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([A-Za-z0-9_-]{11})/);
+  return match ? match[1] : null;
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -29,14 +35,23 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "Missing itag for YouTube page URL" }, { status: 400 });
       }
 
-      const info: any = await youtubedl(targetUrl, {
-        dumpJson: true,
-        noWarnings: true,
-        noCheckCertificates: true,
-        preferFreeFormats: true,
-      });
+      let info: any = null;
+      try {
+        info = await youtubedl(targetUrl, {
+          dumpJson: true,
+          noWarnings: true,
+          noCheckCertificates: true,
+          preferFreeFormats: true,
+          impersonate: "chrome",
+        } as any);
+      } catch {
+        const vidId = extractVideoId(targetUrl);
+        if (vidId) {
+          info = await resolveInvidiousVideo(vidId);
+        }
+      }
 
-      const matchedFormat = info.formats?.find((f: any) => f.format_id === itagParam);
+      const matchedFormat = info?.formats?.find((f: any) => f.format_id === itagParam);
       if (!matchedFormat || !matchedFormat.url) {
         return NextResponse.json({ error: `Format ${itagParam} not found for this video` }, { status: 404 });
       }

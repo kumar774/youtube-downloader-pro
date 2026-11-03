@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { create } from "youtube-dl-exec";
 import { resolveYtDlpBinary } from "@/lib/binResolver";
 import { ensureNetscapeCookies } from "@/lib/cookieHelper";
+import { resolveInvidiousVideo } from "@/lib/invidiousResolver";
 import path from "path";
 import fs from "fs";
 
@@ -88,31 +89,40 @@ export async function POST(req: NextRequest) {
           ],
         } as any);
       } catch (secErr: any) {
-        console.warn("[/api/info] Second fallback failed, trying tv/web_safari client...");
+        console.warn("[/api/info] Mobile fallback failed, trying Invidious distributed network fallback...");
         try {
-          // Fallback 2: TV / web_safari client
-          info = await youtubedl(videoUrl, {
-            ...ytOptions,
-            extractorArgs: [
-              "youtube:player_client=tv,web_safari",
-              ...potArg
-            ],
-          } as any);
-        } catch (thirdErr: any) {
-          // Fallback 3: If cookies available, try with cookies as last resort (for age-gated/private)
-          if (cookiesPath) {
-            console.warn("[/api/info] Trying with cookies as last resort...");
-            try {
-              info = await youtubedl(videoUrl, {
-                ...ytOptions,
-                cookies: cookiesPath,
-                extractorArgs: potArg,
-              } as any);
-            } catch {
+          // Fallback 2: Distributed Invidious network (bypasses all datacenter 429 / bot challenges)
+          info = await resolveInvidiousVideo(videoId);
+        } catch (invErr: any) {
+          console.warn("[/api/info] Invidious fallback failed, trying TV client...", invErr?.message);
+        }
+
+        if (!info) {
+          try {
+            // Fallback 3: TV / web_safari client
+            info = await youtubedl(videoUrl, {
+              ...ytOptions,
+              extractorArgs: [
+                "youtube:player_client=tv,web_safari",
+                ...potArg
+              ],
+            } as any);
+          } catch (thirdErr: any) {
+            // Fallback 4: If cookies available, try with cookies as last resort (for age-gated/private)
+            if (cookiesPath) {
+              console.warn("[/api/info] Trying with cookies as last resort...");
+              try {
+                info = await youtubedl(videoUrl, {
+                  ...ytOptions,
+                  cookies: cookiesPath,
+                  extractorArgs: potArg,
+                } as any);
+              } catch {
+                throw primaryErr;
+              }
+            } else {
               throw primaryErr;
             }
-          } else {
-            throw primaryErr;
           }
         }
       }
