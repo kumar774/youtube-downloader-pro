@@ -29,6 +29,7 @@ RUN curl -L https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/la
 
 # Global configuration for yt-dlp to solve BotGuard challenges via bgutil POT provider
 RUN echo '--extractor-args "youtube:player-client=mweb,tv,web_safari;player_skip=webpage"' >> /etc/yt-dlp.conf \
+    && echo '--extractor-args "youtubepot-bgutilcli:cli_path=/usr/local/bin/bgutil-pot"' >> /etc/yt-dlp.conf \
     && echo '--extractor-args "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416"' >> /etc/yt-dlp.conf \
     && echo '--js-runtimes deno' >> /etc/yt-dlp.conf \
     && echo '--no-check-certificates' >> /etc/yt-dlp.conf

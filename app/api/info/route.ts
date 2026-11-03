@@ -62,23 +62,37 @@ export async function POST(req: NextRequest) {
       ytOptions.cookies = cookiesPath;
     }
 
-    // Extract using youtube-dl-exec with automatic client fallback
+    // Extract using youtube-dl-exec with automatic client fallback and POT solver
     let info: any = null;
+    const potArg = process.platform === "linux" ? ["youtubepot-bgutilcli:cli_path=/usr/local/bin/bgutil-pot"] : [];
+
     try {
-      info = await youtubedl(videoUrl, ytOptions as any);
+      info = await youtubedl(videoUrl, {
+        ...ytOptions,
+        extractorArgs: [
+          "youtube:player_client=mweb,tv,web_safari;player_skip=webpage",
+          ...potArg
+        ],
+      } as any);
     } catch (primaryErr: any) {
       console.warn("[/api/info] Primary extraction failed, trying iOS/Android client fallback with player_skip=webpage...");
       try {
         info = await youtubedl(videoUrl, {
           ...ytOptions,
-          extractorArgs: "youtube:player_client=ios,android,tv;player_skip=webpage",
+          extractorArgs: [
+            "youtube:player_client=ios,android,tv;player_skip=webpage",
+            ...potArg
+          ],
         } as any);
       } catch (secErr: any) {
-        console.warn("[/api/info] Second fallback failed, trying mweb client...");
+        console.warn("[/api/info] Second fallback failed, trying web client...");
         try {
           info = await youtubedl(videoUrl, {
             ...ytOptions,
-            extractorArgs: "youtube:player_client=mweb,tv_embedded;player_skip=webpage",
+            extractorArgs: [
+              "youtube:player_client=web;player_skip=webpage",
+              ...potArg
+            ],
           } as any);
         } catch {
           throw primaryErr;

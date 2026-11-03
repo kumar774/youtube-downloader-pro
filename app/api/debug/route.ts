@@ -7,8 +7,9 @@ import fs from "fs";
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const targetUrl = searchParams.get("url") || "https://www.youtube.com/watch?v=PbC3J_PK3oU";
-  const clientArg = searchParams.get("client") || "ios,android,tv";
+  const clientArg = searchParams.get("client") || "mweb,tv,web_safari";
   const useCookies = searchParams.get("nocookies") !== "1";
+  const potMode = searchParams.get("pot") || "cli";
 
   const binPath = resolveYtDlpBinary();
   const cookiesPath = useCookies ? ensureNetscapeCookies() : null;
@@ -22,8 +23,8 @@ export async function GET(req: NextRequest) {
 
   let potServerStatus = "unknown";
   try {
-    const potRes = await fetch("http://127.0.0.1:4416", { signal: AbortSignal.timeout(1000) });
-    potServerStatus = `HTTP ${potRes.status}`;
+    const potRes = await fetch("http://127.0.0.1:4416/ping", { signal: AbortSignal.timeout(1000) });
+    potServerStatus = `HTTP ${potRes.status} (${await potRes.text()})`;
   } catch (e: any) {
     potServerStatus = `unreachable: ${e.message}`;
   }
@@ -46,6 +47,12 @@ export async function GET(req: NextRequest) {
       "--extractor-args",
       `youtube:player_client=${clientArg};player_skip=webpage`,
     ];
+
+    if (potMode === "cli") {
+      args.push("--extractor-args", "youtubepot-bgutilcli:cli_path=/usr/local/bin/bgutil-pot");
+    } else {
+      args.push("--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416");
+    }
 
     if (cookiesPath) {
       args.push("--cookies", cookiesPath);
