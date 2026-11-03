@@ -20,6 +20,20 @@ export async function GET(req: NextRequest) {
     cookieContent = fs.readFileSync(cookiesPath, "utf8").substring(0, 300);
   }
 
+  let bgutilDir: string[] = [];
+  try {
+    if (fs.existsSync('/opt/bgutil')) {
+      bgutilDir = fs.readdirSync('/opt/bgutil');
+    }
+  } catch {}
+
+  let bgutilLog = "";
+  try {
+    if (fs.existsSync('/tmp/bgutil.log')) {
+      bgutilLog = fs.readFileSync('/tmp/bgutil.log', 'utf8').substring(0, 1000);
+    }
+  } catch {}
+
   return new Promise<NextResponse>((resolve) => {
     const args = [
       targetUrl,
@@ -43,6 +57,8 @@ export async function GET(req: NextRequest) {
           binPath,
           targetUrl,
           clientArg,
+          bgutilDir,
+          bgutilLog,
           cookiesUsed: !!cookiesPath,
           exitCode: error?.code,
           stderr: stderr || error?.message,
