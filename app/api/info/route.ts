@@ -61,8 +61,29 @@ export async function POST(req: NextRequest) {
       ytOptions.cookies = cookiesPath;
     }
 
-    // Extract using youtube-dl-exec with exact binary path
-    const info: any = await youtubedl(videoUrl, ytOptions);
+    // Extract using youtube-dl-exec with automatic client fallback
+    let info: any = null;
+    try {
+      info = await youtubedl(videoUrl, ytOptions);
+    } catch (primaryErr: any) {
+      console.warn("[/api/info] Primary extraction failed, trying iOS/Android client fallback...");
+      try {
+        info = await youtubedl(videoUrl, {
+          ...ytOptions,
+          extractorArgs: "youtube:player_client=ios,android,tv",
+        });
+      } catch (secErr: any) {
+        console.warn("[/api/info] Second fallback failed, trying mweb client...");
+        try {
+          info = await youtubedl(videoUrl, {
+            ...ytOptions,
+            extractorArgs: "youtube:player_client=mweb,tv_embedded",
+          });
+        } catch {
+          throw primaryErr;
+        }
+      }
+    }
 
     if (!info || !info.formats || info.formats.length === 0) {
       return NextResponse.json({ error: "No formats available for this video." }, { status: 404 });
@@ -236,7 +257,9 @@ export async function POST(req: NextRequest) {
     if (errMsg.includes("Sign in to confirm you") || errMsg.includes("bot")) {
       return NextResponse.json(
         { 
-          error: "YouTube anti-bot verification triggered for this video. Wait 1-2 minutes or place a cookies.txt file in the project folder to bypass." 
+          error: "YouTube anti-bot verification triggered for this video. Wait 1-2 minutes or try another video.",
+          details: errMsg,
+          cookiesLoaded: !!cookiesPath,
         },
         { status: 429 }
       );
