@@ -170,6 +170,7 @@ export async function POST(req: NextRequest) {
         container: container,
         vcodec: f.vcodec,
         url: f.url,
+        directCdnUrl: f.directCdnUrl || f.url,
         hasAudio,
         hasVideo,
         contentLength: rawSize.toString(),
@@ -205,8 +206,11 @@ export async function POST(req: NextRequest) {
     );
     const bestAudio = m4aAudio[0] || audioOnly[0];
 
-    // Auto-promote ALL video resolutions from withoutAudio to withAudio (8K, 4K, 1440p, 1080p, 720p, etc.)
-    // Group withoutAudio by distinct qualityLabel, preferring MP4 and largest size
+    // 1. Separate native pre-merged formats (720p, 360p) that already have video & audio
+    const directWithAudio: any[] = withAudio.filter(f => !f.requiresMerge);
+
+    // 2. High-definition DASH streams (1080p, 1440p, 4K, 8K) auto-merged with best audio
+    const cinemaMerged: any[] = [];
     const candidatesByLabel = new Map<string, any>();
     const sortedCandidates = [...withoutAudio].sort((a, b) => {
       if (a.container === 'mp4' && b.container !== 'mp4') return -1;
@@ -221,13 +225,11 @@ export async function POST(req: NextRequest) {
     }
 
     candidatesByLabel.forEach((videoFormat, label) => {
-      // Check if withAudio already has a native combined stream with audio for this label
-      const alreadyHas = withAudio.some(f => f.qualityLabel === label && !f.requiresMerge);
-      if (!alreadyHas && bestAudio) {
+      if (bestAudio) {
         const vSize = parseInt(videoFormat.contentLength || "0", 10);
         const aSize = parseInt(bestAudio.contentLength || "0", 10);
         
-        withAudio.push({
+        cinemaMerged.push({
           itag: videoFormat.itag,
           quality: `${videoFormat.quality}+${bestAudio.quality}`,
           qualityLabel: videoFormat.qualityLabel,
@@ -253,14 +255,8 @@ export async function POST(req: NextRequest) {
       return res * 1000 + fps;
     };
     
-    withAudio.sort((a, b) => parseQualityScore(b.qualityLabel) - parseQualityScore(a.qualityLabel));
-    
-    withoutAudio.sort((a, b) => {
-      if (a.container !== b.container) {
-        return a.container.localeCompare(b.container); // Groups mp4 and webm
-      }
-      return parseQualityScore(b.qualityLabel) - parseQualityScore(a.qualityLabel);
-    });
+    directWithAudio.sort((a, b) => parseQualityScore(b.qualityLabel) - parseQualityScore(a.qualityLabel));
+    cinemaMerged.sort((a, b) => parseQualityScore(b.qualityLabel) - parseQualityScore(a.qualityLabel));
     
     audioOnly.sort((a, b) => {
       if (a.container !== b.container) {
@@ -279,10 +275,13 @@ export async function POST(req: NextRequest) {
       author: info.uploader || "Unknown",
       videoUrl: videoUrl,
       formats: {
-        withAudio,
-        withoutAudio,
+        directWithAudio,
+        cinemaMerged,
         audioOnly,
-      }
+        withAudio: [...directWithAudio, ...cinemaMerged],
+        withoutAudio: [], // Muted section eliminated completely
+      },
+      subtitles: info.captions || [],
     });
   } catch (err: any) {
     console.error("[/api/info] Error:", err);

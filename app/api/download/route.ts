@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
   const itagParam = searchParams.get("itag");
   const title = searchParams.get("title") || "video";
   const ext = searchParams.get("ext") || "mp4";
+  const mode = searchParams.get("mode");
 
   if (!targetUrl) {
     return NextResponse.json({ error: "Missing url parameter" }, { status: 400 });
@@ -58,6 +59,14 @@ export async function GET(req: NextRequest) {
       }
 
       directCdnUrl = matchedFormat.url;
+    }
+
+    // Fast 302 Redirect Mode: Connects user directly to Google CDN for 20-50 MB/s download speed with 0 server load
+    if (mode === "redirect" && directCdnUrl) {
+      const redirectUrl = directCdnUrl.includes("googlevideo.com")
+        ? `${directCdnUrl}&title=${encodeURIComponent(title)}`
+        : directCdnUrl;
+      return NextResponse.redirect(redirectUrl, 302);
     }
 
     // Proxy the stream from the direct CDN / Invidious proxy stream URL

@@ -9,8 +9,6 @@ import {
   User,
   ChevronDown,
   ChevronUp,
-  VolumeX,
-  Sparkles,
   Zap,
   Scissors,
   FileText,
@@ -24,6 +22,7 @@ export interface FormatInfo {
   qualityLabel: string;
   container: string;
   url: string;
+  directCdnUrl?: string;
   videoStreamUrl?: string;
   audioStreamUrl?: string;
   hasAudio: boolean;
@@ -31,6 +30,12 @@ export interface FormatInfo {
   contentLength?: string;
   mimeType?: string;
   requiresMerge?: boolean;
+}
+
+export interface SubtitleInfo {
+  label: string;
+  lang: string;
+  url?: string;
 }
 
 export interface VideoInfo {
@@ -41,10 +46,13 @@ export interface VideoInfo {
   author: string;
   videoUrl: string;
   formats: {
+    directWithAudio?: FormatInfo[];
+    cinemaMerged?: FormatInfo[];
     withAudio: FormatInfo[];
-    withoutAudio: FormatInfo[];
+    withoutAudio?: FormatInfo[];
     audioOnly: FormatInfo[];
   };
+  subtitles?: SubtitleInfo[];
 }
 
 /* ── Helpers ────────────────────────────────── */
@@ -58,9 +66,11 @@ function sanitizeFilename(title: string) {
   return title.replace(/[<>:"/\\|?*]+/g, "").trim();
 }
 
-function buildProxyUrl(cdnUrl: string, title: string, container: string) {
+function buildDirectDownloadUrl(f: FormatInfo, title: string, container: string) {
+  const targetUrl = f.directCdnUrl || f.url;
   const params = new URLSearchParams({
-    url: cdnUrl,
+    url: targetUrl,
+    mode: "redirect",
     title: sanitizeFilename(title),
     ext: container,
   });
@@ -69,12 +79,14 @@ function buildProxyUrl(cdnUrl: string, title: string, container: string) {
 
 /* ── Component ──────────────────────────────── */
 export default function VideoCard({ info }: { info: VideoInfo }) {
-  const [showAll, setShowAll] = useState(false);
+  const [showAllCinema, setShowAllCinema] = useState(false);
   const [selectedBitrate, setSelectedBitrate] = useState<"320k" | "192k" | "128k">("320k");
   const [turboMode, setTurboMode] = useState<boolean>(true);
   const [clipEnabled, setClipEnabled] = useState(false);
   const [clipStart, setClipStart] = useState("");
   const [clipEnd, setClipEnd] = useState("");
+  const [selectedSubtitleLang, setSelectedSubtitleLang] = useState<string>("en");
+
   const [activeJob, setActiveJob] = useState<{
     jobId: string;
     title: string;
@@ -83,21 +95,27 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
   } | null>(null);
   const [startingJob, setStartingJob] = useState(false);
 
-  const { withAudio, withoutAudio, audioOnly } = info.formats || {
-    withAudio: [],
-    withoutAudio: [],
-    audioOnly: [],
-  };
+  // Groupings
+  const directFormats =
+    info.formats?.directWithAudio?.length
+      ? info.formats.directWithAudio
+      : (info.formats?.withAudio || []).filter((f) => !f.requiresMerge);
 
-  const visibleVideoWithAudio =
-    showAll || withAudio.length <= 6 ? withAudio : withAudio.slice(0, 6);
-  const visibleVideoMuted = showAll ? withoutAudio : withoutAudio.slice(0, 3);
-  const visibleAudio = showAll ? audioOnly : audioOnly.slice(0, 3);
+  const cinemaFormats =
+    info.formats?.cinemaMerged?.length
+      ? info.formats.cinemaMerged
+      : (info.formats?.withAudio || []).filter((f) => f.requiresMerge);
 
-  const totalFormats = withAudio.length + withoutAudio.length + audioOnly.length;
-  const hasHidden =
-    totalFormats >
-    visibleVideoWithAudio.length + visibleVideoMuted.length + visibleAudio.length;
+  const audioOnly = info.formats?.audioOnly || [];
+  const subtitlesList =
+    info.subtitles && info.subtitles.length > 0
+      ? info.subtitles
+      : [{ label: "English", lang: "en" }];
+
+  const visibleCinema =
+    showAllCinema || cinemaFormats.length <= 6
+      ? cinemaFormats
+      : cinemaFormats.slice(0, 6);
 
   const handleStartMerge = async (
     formatId: string,
@@ -228,7 +246,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
           </div>
         </div>
 
-        {/* ── Download Section ───────────────────── */}
+        {/* ── Download Control Panel ───────────────────── */}
         <div className="border-t border-white/5 px-5 py-5 sm:px-6">
           {/* Download Speed Mode Toggle Switch */}
           <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-xl border border-white/10 bg-gradient-to-r from-slate-900/90 via-slate-800/60 to-slate-900/90 p-4 shadow-lg">
@@ -240,7 +258,11 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
                     : "border-slate-700 bg-slate-800/80 text-slate-400"
                 }`}
               >
-                <Zap className={`h-6 w-6 transition-all ${turboMode ? "animate-pulse fill-amber-400" : ""}`} />
+                <Zap
+                  className={`h-6 w-6 transition-all ${
+                    turboMode ? "animate-pulse fill-amber-400" : ""
+                  }`}
+                />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -257,7 +279,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
                 </div>
                 <p className="mt-0.5 text-xs text-slate-400">
                   {turboMode
-                    ? "High-speed multi-threaded download buffer enabled"
+                    ? "High-speed 16-channel multi-stream buffer enabled"
                     : "Standard single-stream download"}
                 </p>
               </div>
@@ -279,7 +301,9 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
                 aria-checked={turboMode}
                 onClick={() => setTurboMode(!turboMode)}
                 className={`relative inline-flex h-6 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
-                  turboMode ? "bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.4)]" : "bg-slate-700"
+                  turboMode
+                    ? "bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.4)]"
+                    : "bg-slate-700"
                 }`}
               >
                 <span
@@ -292,7 +316,9 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
               <span
                 onClick={() => setTurboMode(true)}
                 className={`text-xs cursor-pointer select-none transition-colors ${
-                  turboMode ? "text-amber-400 font-extrabold flex items-center gap-1" : "text-slate-400 hover:text-slate-300"
+                  turboMode
+                    ? "text-amber-400 font-extrabold flex items-center gap-1"
+                    : "text-slate-400 hover:text-slate-300"
                 }`}
               >
                 Turbo ⚡
@@ -300,7 +326,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
             </div>
           </div>
 
-          {/* Clip / Segment Cutter (Optional Feature) */}
+          {/* Clip / Segment Cutter */}
           <div className="mb-6 rounded-xl border border-white/10 bg-slate-900/60 p-4 transition-all">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
@@ -362,17 +388,24 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
             )}
           </div>
 
-          {/* Primary Section: Video + Audio */}
-          {withAudio.length > 0 && (
-            <div className="mb-6">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-400">
-                <Film className="h-4 w-4 text-emerald-400" />
-                Ready to Watch / With Audio
-              </h3>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {visibleVideoWithAudio.map((f, i) => (
+          {/* ══════════════════════════════════════════════════════════════
+              SECTION 1: Instant Fast Download (Ready with Audio)
+             ══════════════════════════════════════════════════════════════ */}
+          {directFormats.length > 0 && (
+            <div className="mb-7">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-emerald-400">
+                  <Film className="h-4 w-4 text-emerald-400" />
+                  Instant Fast Download (Ready with Audio) ⚡
+                </h3>
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Direct CDN · 20-50 MB/s
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                {directFormats.map((f, i) => (
                   <FormatRow
-                    key={`vwa-${i}`}
+                    key={`direct-${i}`}
                     f={f}
                     title={info.title}
                     variant="green"
@@ -385,99 +418,157 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
             </div>
           )}
 
-          {/* Secondary Section: Audio Only */}
-          {audioOnly.length > 0 && (
-            <div className="mb-6">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-400">
-                <Music className="h-4 w-4 text-purple-400" />
-                Audio Only / MP3
-              </h3>
-
-              {/* Auto MP3 Convert Banner with Bitrate Studio */}
-              {info.videoUrl && (
-                <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-purple-500/20 bg-purple-500/10 p-4">
-                  <div className="flex flex-col">
-                    <span className="text-sm font-bold text-white flex items-center gap-1.5">
-                      MP3 Studio Suite{" "}
-                      <span className="bg-purple-500/20 text-purple-300 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold">
-                        ⚡ Turbo 8X
-                      </span>
-                    </span>
-                    <span className="text-xs text-slate-400 mt-0.5">
-                      Extracts crystal clear audio with high-speed parallel download
-                    </span>
-                    {/* Bitrate Selector Pills */}
-                    <div className="mt-2.5 flex items-center gap-1.5">
-                      <span className="text-xs text-slate-400 font-medium mr-1">Bitrate:</span>
-                      {(["320k", "192k", "128k"] as const).map((b) => (
-                        <button
-                          key={b}
-                          type="button"
-                          onClick={() => setSelectedBitrate(b)}
-                          className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
-                            selectedBitrate === b
-                              ? "bg-purple-600 text-white shadow-[0_0_10px_rgba(168,85,247,0.4)]"
-                              : "bg-white/5 text-slate-400 hover:text-white hover:bg-white/10"
-                          }`}
-                        >
-                          {b === "320k" ? "320 kbps (HD)" : b === "192k" ? "192 kbps" : "128 kbps"}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleStartConvert(selectedBitrate)}
+          {/* ══════════════════════════════════════════════════════════════
+              SECTION 2: Cinema Full HD & 4K (Auto-Merged with Audio)
+             ══════════════════════════════════════════════════════════════ */}
+          {cinemaFormats.length > 0 && (
+            <div className="mb-7">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-blue-400">
+                  <Film className="h-4 w-4 text-blue-400" />
+                  Cinema Full HD & 4K (Auto-Merged with Audio) 🎬
+                </h3>
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                  FFmpeg Muxer
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                {visibleCinema.map((f, i) => (
+                  <FormatRow
+                    key={`cinema-${i}`}
+                    f={f}
+                    title={info.title}
+                    variant="blue"
+                    onStartMerge={handleStartMerge}
                     disabled={startingJob}
-                    className={`flex shrink-0 items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg hover:scale-[1.02] disabled:opacity-50 ${
-                      turboMode
-                        ? "bg-gradient-to-r from-purple-500 via-indigo-500 to-amber-500 text-white shadow-purple-500/30"
-                        : "bg-slate-700 hover:bg-slate-600 text-slate-200"
-                    }`}
+                    turboMode={turboMode}
+                  />
+                ))}
+              </div>
+
+              {cinemaFormats.length > 6 && (
+                <div className="mt-3.5 flex justify-center">
+                  <button
+                    onClick={() => setShowAllCinema((v) => !v)}
+                    className="flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-4 py-1.5 text-xs font-semibold text-blue-400 transition-colors hover:bg-blue-500/20 hover:text-blue-300"
                   >
-                    {turboMode ? (
+                    {showAllCinema ? (
                       <>
-                        <Zap className="h-4 w-4 text-amber-300 fill-amber-300" />
-                        <span>Convert to MP3 (Turbo ⚡)</span>
+                        Show Fewer Qualities <ChevronUp className="h-3.5 w-3.5" />
                       </>
                     ) : (
                       <>
-                        <Download className="h-4 w-4" />
-                        <span>Convert to MP3 (Normal)</span>
+                        Show All {cinemaFormats.length} HD Qualities{" "}
+                        <ChevronDown className="h-3.5 w-3.5" />
                       </>
                     )}
                   </button>
                 </div>
               )}
-
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {visibleAudio.map((f, i) => (
-                  <FormatRow
-                    key={`a-${i}`}
-                    f={f}
-                    title={info.title}
-                    variant="purple"
-                    onStartMerge={handleStartMerge}
-                    disabled={startingJob}
-                  />
-                ))}
-              </div>
             </div>
           )}
 
-          {/* Subtitles & Lyrics Extractor */}
-          <div className="mb-6 rounded-xl border border-white/10 bg-slate-900/60 p-4">
-            <div className="flex items-center justify-between mb-3">
+          {/* ══════════════════════════════════════════════════════════════
+              SECTION 3: MP3 Studio Converter
+             ══════════════════════════════════════════════════════════════ */}
+          <div className="mb-7">
+            <div className="rounded-xl border border-purple-500/25 bg-gradient-to-r from-purple-950/40 via-slate-900/80 to-purple-950/40 p-4 sm:p-5 shadow-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex flex-col">
+                  <span className="text-base font-bold text-white flex items-center gap-2">
+                    <Music className="h-4 w-4 text-purple-400" />
+                    MP3 Studio Converter
+                    <span className="bg-purple-500/20 text-purple-300 text-[10px] px-2 py-0.5 rounded-full uppercase font-extrabold border border-purple-500/30">
+                      ID3 Tags Included
+                    </span>
+                  </span>
+                  <span className="text-xs text-slate-400 mt-1">
+                    Converts audio directly to MP3 with embedded Title, Artist, and Album metadata
+                  </span>
+
+                  {/* Bitrate Selector Pills */}
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="text-xs text-slate-400 font-semibold mr-1">Quality:</span>
+                    {(["320k", "192k", "128k"] as const).map((b) => (
+                      <button
+                        key={b}
+                        type="button"
+                        onClick={() => setSelectedBitrate(b)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                          selectedBitrate === b
+                            ? "bg-purple-600 text-white shadow-[0_0_12px_rgba(168,85,247,0.45)] border border-purple-400/50"
+                            : "bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 border border-white/5"
+                        }`}
+                      >
+                        {b === "320k"
+                          ? "320 kbps (Studio HD)"
+                          : b === "192k"
+                          ? "192 kbps (Standard)"
+                          : "128 kbps (Light)"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => handleStartConvert(selectedBitrate)}
+                  disabled={startingJob}
+                  className={`flex shrink-0 items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:scale-[1.02] disabled:opacity-50 ${
+                    turboMode
+                      ? "bg-gradient-to-r from-purple-500 via-indigo-500 to-amber-500 text-white shadow-purple-500/30"
+                      : "bg-purple-600 hover:bg-purple-500 text-white"
+                  }`}
+                >
+                  {turboMode ? (
+                    <>
+                      <Zap className="h-4 w-4 text-amber-300 fill-amber-300" />
+                      <span>Download MP3 (Turbo ⚡)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4" />
+                      <span>Download MP3</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ══════════════════════════════════════════════════════════════
+              SECTION 4: Subtitles & Lyrics Extractor
+             ══════════════════════════════════════════════════════════════ */}
+          <div className="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
               <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-400">
                 <FileText className="h-4 w-4 text-cyan-400" />
                 Subtitles & Lyrics Extractor
               </h3>
-              <span className="text-[10px] bg-cyan-500/20 text-cyan-300 font-bold px-2 py-0.5 rounded-full border border-cyan-500/30">
-                1-Click Download
-              </span>
+
+              {/* Language Selector Dropdown */}
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-slate-400 font-medium">Language:</label>
+                <select
+                  value={selectedSubtitleLang}
+                  onChange={(e) => setSelectedSubtitleLang(e.target.value)}
+                  className="rounded-lg bg-black/60 border border-white/10 px-2.5 py-1 text-xs text-white focus:outline-none focus:border-cyan-400"
+                >
+                  {subtitlesList.map((sub, i) => (
+                    <option key={`sub-${i}`} value={sub.lang}>
+                      {sub.label} ({sub.lang.toUpperCase()})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <a
-                href={`/api/subtitles?url=${encodeURIComponent(info.videoUrl)}&title=${encodeURIComponent(info.title)}&format=txt`}
+                href={`/api/subtitles?url=${encodeURIComponent(
+                  info.videoUrl
+                )}&title=${encodeURIComponent(
+                  info.title
+                )}&lang=${selectedSubtitleLang}&format=txt`}
                 className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] p-3 hover:border-cyan-500/30 hover:bg-cyan-500/5 transition-all group"
               >
                 <div className="flex flex-col">
@@ -490,74 +581,40 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
               </a>
 
               <a
-                href={`/api/subtitles?url=${encodeURIComponent(info.videoUrl)}&title=${encodeURIComponent(info.title)}&format=srt`}
+                href={`/api/subtitles?url=${encodeURIComponent(
+                  info.videoUrl
+                )}&title=${encodeURIComponent(
+                  info.title
+                )}&lang=${selectedSubtitleLang}&format=srt`}
                 className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] p-3 hover:border-cyan-500/30 hover:bg-cyan-500/5 transition-all group"
               >
                 <div className="flex flex-col">
                   <span className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
-                    Subtitles (SRT)
+                    Time-synced (.SRT)
                   </span>
-                  <span className="text-xs text-slate-400">Time-synced (.SRT)</span>
+                  <span className="text-xs text-slate-400">Standard Players</span>
                 </div>
                 <Download className="h-4 w-4 text-cyan-400 shrink-0" />
               </a>
 
               <a
-                href={`/api/subtitles?url=${encodeURIComponent(info.videoUrl)}&title=${encodeURIComponent(info.title)}&format=vtt`}
+                href={`/api/subtitles?url=${encodeURIComponent(
+                  info.videoUrl
+                )}&title=${encodeURIComponent(
+                  info.title
+                )}&lang=${selectedSubtitleLang}&format=vtt`}
                 className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] p-3 hover:border-cyan-500/30 hover:bg-cyan-500/5 transition-all group"
               >
                 <div className="flex flex-col">
                   <span className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
-                    Web Captions
+                    Web Captions (.VTT)
                   </span>
-                  <span className="text-xs text-slate-400">WebVTT (.VTT)</span>
+                  <span className="text-xs text-slate-400">HTML5 / Web</span>
                 </div>
                 <Download className="h-4 w-4 text-cyan-400 shrink-0" />
               </a>
             </div>
           </div>
-
-          {/* Tertiary Section: Video Muted */}
-          {withoutAudio.length > 0 && (
-            <div className="mb-4">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-400">
-                <VolumeX className="h-4 w-4 text-rose-400" />
-                High Resolution - No Audio 🔇
-              </h3>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {visibleVideoMuted.map((f, i) => (
-                  <FormatRow
-                    key={`vm-${i}`}
-                    f={f}
-                    title={info.title}
-                    variant="grey"
-                    onStartMerge={handleStartMerge}
-                    disabled={startingJob}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Show All Toggle */}
-          {(hasHidden || showAll) && (
-            <div className="mt-4 flex justify-center">
-              <button
-                onClick={() => setShowAll((v) => !v)}
-                className="flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-2 text-sm font-medium text-indigo-400 transition-colors hover:bg-indigo-500/20 hover:text-indigo-300"
-              >
-                {showAll ? (
-                  <>
-                    Show Less <ChevronUp className="h-4 w-4" />
-                  </>
-                ) : (
-                  <>
-                    Show All {totalFormats} Qualities <ChevronDown className="h-4 w-4" />
-                  </>
-                )}
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -586,70 +643,69 @@ function FormatRow({
 }: {
   f: FormatInfo;
   title: string;
-  variant: "green" | "purple" | "grey";
-  onStartMerge: (quality: string, label: string, videoStreamUrl?: string, audioStreamUrl?: string) => void;
+  variant: "green" | "blue" | "purple";
+  onStartMerge: (
+    quality: string,
+    label: string,
+    videoStreamUrl?: string,
+    audioStreamUrl?: string
+  ) => void;
   disabled?: boolean;
   turboMode?: boolean;
 }) {
   const size = fileSize(f.contentLength);
   const label = `${f.qualityLabel || f.quality} · ${f.container.toUpperCase()}`;
-  const isMuted = f.hasVideo && !f.hasAudio;
-
-  let btnClass = "";
-  if (variant === "green") btnClass = "btn-green";
-  else if (variant === "purple") btnClass = "btn-purple";
-  else if (variant === "grey")
-    btnClass =
-      "bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 shadow-[0_0_15px_rgba(148,163,184,0.1)]";
 
   return (
-    <div className="group flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2.5 transition-colors hover:border-white/10 hover:bg-white/[0.04]">
+    <div className="group flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] px-3.5 py-3 transition-colors hover:border-white/10 hover:bg-white/[0.04]">
       {/* Info */}
       <div className="flex flex-col">
-        <span className="flex items-center gap-1.5 text-sm font-semibold text-white">
+        <span className="flex items-center gap-1.5 text-sm font-bold text-white">
           {label}
-          {isMuted && (
-            <span title="No Audio (Video Only)" className="text-rose-400">
-              <VolumeX className="h-3.5 w-3.5" />
-            </span>
-          )}
         </span>
-        {size && <span className="text-xs text-slate-500">{size}</span>}
+        {size && <span className="text-xs text-slate-400">{size}</span>}
       </div>
 
       {/* Download Action */}
       <div className="flex items-center gap-2">
         {f.requiresMerge ? (
           <button
-            onClick={() => onStartMerge(f.quality, f.qualityLabel, f.videoStreamUrl || f.url, f.audioStreamUrl)}
+            onClick={() =>
+              onStartMerge(
+                f.quality,
+                f.qualityLabel,
+                f.videoStreamUrl || f.url,
+                f.audioStreamUrl
+              )
+            }
             disabled={disabled}
-            title={turboMode ? "High-Speed Turbo Download" : "Standard Speed Download"}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-50 ${
-              turboMode && variant === "green"
-                ? "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-[0_0_15px_rgba(16,185,129,0.35)]"
-                : btnClass
-            }`}
+            title={
+              turboMode
+                ? "High-Speed Turbo FFmpeg Merge"
+                : "Standard Speed FFmpeg Merge"
+            }
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.35)] disabled:opacity-50"
           >
             {turboMode ? (
               <>
                 <Zap className="h-3.5 w-3.5 text-amber-300 fill-amber-300" />
-                <span>Turbo ⚡</span>
+                <span>Merge & Turbo ⚡</span>
               </>
             ) : (
               <>
                 <Download className="h-3.5 w-3.5" />
-                <span>Normal</span>
+                <span>Merge & Download</span>
               </>
             )}
           </button>
         ) : (
           <a
-            href={buildProxyUrl(f.url, title, f.container)}
-            title={isMuted ? "Download Video (No Audio)" : "Direct Download"}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${btnClass}`}
+            href={buildDirectDownloadUrl(f, title, f.container)}
+            title="Instant Fast Download at full ISP speed"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-[0_0_15px_rgba(16,185,129,0.35)]"
           >
             <Download className="h-3.5 w-3.5" />
-            Download
+            <span>Fast 1-Click ⚡</span>
           </a>
         )}
       </div>

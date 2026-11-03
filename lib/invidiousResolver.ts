@@ -193,6 +193,15 @@ function mapInvidiousToYtDlp(data: any, videoId: string, instanceUrl: string): a
     bestThumb = maxRes?.url || data.videoThumbnails[0].url;
   }
 
+  // Extract subtitles / captions
+  const captions = Array.isArray(data.captions)
+    ? data.captions.map((c: any) => ({
+        label: c.label || c.language_code || "Subtitle",
+        lang: c.language_code || "en",
+        url: c.url?.startsWith("http") ? c.url : `${instanceUrl}${c.url}`,
+      }))
+    : [];
+
   return {
     id: videoId,
     title: data.title || "YouTube Video",
@@ -200,5 +209,6 @@ function mapInvidiousToYtDlp(data: any, videoId: string, instanceUrl: string): a
     duration: data.lengthSeconds || 0,
     uploader: data.author || "YouTube Creator",
     formats: rawFormats,
+    captions,
   };
 }
