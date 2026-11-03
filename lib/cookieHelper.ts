@@ -1,32 +1,56 @@
 import fs from "fs";
 import path from "path";
+import os from "os";
 
 /**
  * Ensures cookies.txt is in valid Netscape format for yt-dlp.
- * If the file is in JSON format, converts it automatically.
+ * Supports:
+ * 1. Base64 or plain-text YOUTUBE_COOKIES environment variable (for Render/Cloud)
+ * 2. Local cookies.txt (Netscape or JSON format, auto-converts)
+ * Writes to os.tmpdir() for cross-platform/container write safety.
  */
 export function ensureNetscapeCookies(): string | null {
-  const cookiesPath = path.resolve(process.cwd(), "cookies.txt");
+  const tmpCookiesPath = path.join(os.tmpdir(), "yt_cookies.txt");
+  const localCookiesPath = path.resolve(process.cwd(), "cookies.txt");
 
-  // If cookies.txt doesn't exist but YOUTUBE_COOKIES environment variable is provided (e.g. Render / Production)
-  if (!fs.existsSync(cookiesPath) && process.env.YOUTUBE_COOKIES) {
+  let rawContent: string | null = null;
+
+  // 1. Check YOUTUBE_COOKIES environment variable
+  if (process.env.YOUTUBE_COOKIES) {
+    let envVal = process.env.YOUTUBE_COOKIES.trim();
+    // Try base64 decode if applicable
     try {
-      fs.writeFileSync(cookiesPath, process.env.YOUTUBE_COOKIES.trim(), "utf8");
-      console.log("[cookieHelper] Written cookies from YOUTUBE_COOKIES environment variable.");
+      const decoded = Buffer.from(envVal, "base64").toString("utf8");
+      if (
+        decoded.includes("youtube.com") ||
+        decoded.startsWith("# Netscape") ||
+        decoded.startsWith("[")
+      ) {
+        envVal = decoded;
+      }
+    } catch {
+      // not base64, use raw
+    }
+    rawContent = envVal;
+  } else if (fs.existsSync(localCookiesPath)) {
+    try {
+      rawContent = fs.readFileSync(localCookiesPath, "utf8").trim();
     } catch (e) {
-      console.warn("[cookieHelper] Failed to write YOUTUBE_COOKIES env var to file:", e);
+      console.warn("[cookieHelper] Failed to read local cookies.txt:", e);
     }
   }
 
-  if (!fs.existsSync(cookiesPath)) return null;
+  if (!rawContent) return null;
 
   try {
-    const content = fs.readFileSync(cookiesPath, "utf8").trim();
-    if (content.startsWith("[") || content.startsWith("{")) {
-      const parsed = JSON.parse(content);
+    let netscapeContent = rawContent;
+
+    // Auto-convert JSON cookies to Netscape format
+    if (rawContent.startsWith("[") || rawContent.startsWith("{")) {
+      const parsed = JSON.parse(rawContent);
       const cookies = Array.isArray(parsed) ? parsed : [parsed];
 
-      let netscape =
+      netscapeContent =
         "# Netscape HTTP Cookie File\n# http://curl.haxx.se/rfc/cookie_spec.html\n# Auto-converted by YT_Download\n\n";
 
       for (const c of cookies) {
@@ -37,16 +61,23 @@ export function ensureNetscapeCookies(): string | null {
         const expiry = Math.round(c.expirationDate || 2147483647);
         const name = c.name || "";
         const value = c.value || "";
-        netscape += `${domain}\t${flag}\t${cookiePath}\t${secure}\t${expiry}\t${name}\t${value}\n`;
+        netscapeContent += `${domain}\t${flag}\t${cookiePath}\t${secure}\t${expiry}\t${name}\t${value}\n`;
       }
-
-      fs.writeFileSync(cookiesPath, netscape, "utf8");
-      console.log("[cookieHelper] Converted JSON cookies to Netscape format successfully.");
     }
-    return cookiesPath;
+
+    // Write to tmp path (guaranteed writable across Linux/Docker/Windows)
+    fs.writeFileSync(tmpCookiesPath, netscapeContent, "utf8");
+
+    // Also update local file if possible
+    try {
+      fs.writeFileSync(localCookiesPath, netscapeContent, "utf8");
+    } catch {
+      // ignore in read-only environments
+    }
+
+    return tmpCookiesPath;
   } catch (err) {
-    console.warn("[cookieHelper] Failed to read/convert cookies:", err);
-    return cookiesPath;
+    console.warn("[cookieHelper] Failed to format cookies:", err);
+    return fs.existsSync(tmpCookiesPath) ? tmpCookiesPath : null;
   }
 }
-
