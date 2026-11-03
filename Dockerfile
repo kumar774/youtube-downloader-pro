@@ -11,8 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp POT provider plugin in Python environment
-RUN pip3 install --no-cache-dir --break-system-packages bgutil-ytdlp-pot-provider
+# Install matching Rust POT provider plugin for yt-dlp
+RUN mkdir -p /etc/yt-dlp/plugins/bgutil \
+    && curl -L https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-ytdlp-pot-provider-rs.zip -o /tmp/plugin.zip \
+    && unzip -q /tmp/plugin.zip -d /etc/yt-dlp/plugins/bgutil \
+    && rm /tmp/plugin.zip
 
 # Install Deno globally (yt-dlp official JS runtime for YouTube challenge solving)
 RUN curl -fsSL https://deno.land/install.sh | sh -s -- -y \
@@ -28,7 +31,8 @@ RUN curl -L https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/la
     && chmod a+rx /usr/local/bin/bgutil-pot
 
 # Global configuration for yt-dlp to solve BotGuard challenges via bgutil POT provider
-RUN echo '--extractor-args "youtube:player-client=mweb,tv,web_safari;player_skip=webpage"' >> /etc/yt-dlp.conf \
+RUN echo '--plugin-dirs /etc/yt-dlp/plugins/bgutil' >> /etc/yt-dlp.conf \
+    && echo '--extractor-args "youtube:player-client=mweb,tv,web_safari;player_skip=webpage"' >> /etc/yt-dlp.conf \
     && echo '--extractor-args "youtubepot-bgutilcli:cli_path=/usr/local/bin/bgutil-pot"' >> /etc/yt-dlp.conf \
     && echo '--extractor-args "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416"' >> /etc/yt-dlp.conf \
     && echo '--js-runtimes deno' >> /etc/yt-dlp.conf \

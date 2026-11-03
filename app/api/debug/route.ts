@@ -42,6 +42,8 @@ export async function GET(req: NextRequest) {
       "--dump-json",
       "--verbose",
       "--no-check-certificates",
+      "--plugin-dirs",
+      "/etc/yt-dlp/plugins/bgutil",
       "--js-runtimes",
       process.platform === "linux" ? "deno" : "node",
       "--extractor-args",

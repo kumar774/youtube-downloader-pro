@@ -58,13 +58,20 @@ export async function POST(req: NextRequest) {
       jsRuntimes: process.platform === "linux" ? "deno" : "node",
     };
 
+    if (process.platform === "linux") {
+      ytOptions.pluginDirs = "/etc/yt-dlp/plugins/bgutil";
+    }
+
     if (cookiesPath) {
       ytOptions.cookies = cookiesPath;
     }
 
     // Extract using youtube-dl-exec with automatic client fallback and POT solver
     let info: any = null;
-    const potArg = process.platform === "linux" ? ["youtubepot-bgutilcli:cli_path=/usr/local/bin/bgutil-pot"] : [];
+    const potArg = process.platform === "linux" ? [
+      "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
+      "youtubepot-bgutilcli:cli_path=/usr/local/bin/bgutil-pot",
+    ] : [];
 
     try {
       info = await youtubedl(videoUrl, {
