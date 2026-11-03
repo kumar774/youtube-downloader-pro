@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
       noCallHome: true,
       noCheckCertificates: true,
       preferFreeFormats: true,
+      ignoreConfig: true,
     };
 
     if (activeCookies) {
@@ -54,17 +55,19 @@ export async function POST(req: NextRequest) {
     }
 
     let rawInfo: any = null;
+    let extractionError: string = "";
     try {
       rawInfo = await youtubedl(mediaUrl, options);
     } catch (err: any) {
-      console.error("[/api/social] Extraction error:", err?.message || err);
+      extractionError = err?.message || String(err);
+      console.error("[/api/social] Extraction error:", extractionError);
     }
 
     if (!rawInfo) {
       const msg =
         platform === "instagram"
           ? "Could not fetch Instagram post. Instagram currently requires a logged-in session or this video is private/restricted."
-          : "Could not fetch Facebook video. The video might be private, restricted, or unavailable.";
+          : `Could not fetch Facebook video. (${extractionError.slice(0, 150) || "The video might be private, restricted, or unavailable."})`;
       return NextResponse.json({ error: msg }, { status: 404 });
     }
 
@@ -117,7 +120,7 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error("[/api/social] Unexpected error:", err);
     return NextResponse.json(
-      { error: "Internal server error while retrieving media details." },
+      { error: `Internal error: ${err?.message || String(err)}` },
       { status: 500 }
     );
   }
