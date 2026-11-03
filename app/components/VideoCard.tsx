@@ -24,6 +24,8 @@ export interface FormatInfo {
   qualityLabel: string;
   container: string;
   url: string;
+  videoStreamUrl?: string;
+  audioStreamUrl?: string;
   hasAudio: boolean;
   hasVideo: boolean;
   contentLength?: string;
@@ -35,6 +37,7 @@ export interface VideoInfo {
   title: string;
   thumbnail: string;
   duration: string;
+  durationSeconds?: number;
   author: string;
   videoUrl: string;
   formats: {
@@ -96,7 +99,12 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
     totalFormats >
     visibleVideoWithAudio.length + visibleVideoMuted.length + visibleAudio.length;
 
-  const handleStartMerge = async (formatId: string, qualityLabel: string) => {
+  const handleStartMerge = async (
+    formatId: string,
+    qualityLabel: string,
+    videoStreamUrl?: string,
+    audioStreamUrl?: string
+  ) => {
     if (startingJob) return;
     setStartingJob(true);
 
@@ -107,12 +115,15 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           url: info.videoUrl,
+          videoStreamUrl,
+          audioStreamUrl,
           title: info.title,
           artist: info.author,
           format: formatSelector,
           type: "merge",
           thumbnail: info.thumbnail,
           qualityLabel: qualityLabel,
+          durationSeconds: info.durationSeconds,
           turbo: turboMode,
           clipStart: clipEnabled && clipStart.trim() ? clipStart.trim() : undefined,
           clipEnd: clipEnabled && clipEnd.trim() ? clipEnd.trim() : undefined,
@@ -143,17 +154,22 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
     setStartingJob(true);
 
     try {
+      const bestAudio = audioOnly[0];
+      const audioStreamUrl = bestAudio?.url;
+
       const res = await fetch("/api/job/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           url: info.videoUrl,
+          audioStreamUrl,
           title: info.title,
           artist: info.author,
           type: "convert",
           bitrate,
           thumbnail: info.thumbnail,
           qualityLabel: `MP3 ${bitrate.replace("k", " kbps")} Studio`,
+          durationSeconds: info.durationSeconds,
           turbo: turboMode,
           clipStart: clipEnabled && clipStart.trim() ? clipStart.trim() : undefined,
           clipEnd: clipEnabled && clipEnd.trim() ? clipEnd.trim() : undefined,
@@ -571,7 +587,7 @@ function FormatRow({
   f: FormatInfo;
   title: string;
   variant: "green" | "purple" | "grey";
-  onStartMerge: (quality: string, label: string) => void;
+  onStartMerge: (quality: string, label: string, videoStreamUrl?: string, audioStreamUrl?: string) => void;
   disabled?: boolean;
   turboMode?: boolean;
 }) {
@@ -605,7 +621,7 @@ function FormatRow({
       <div className="flex items-center gap-2">
         {f.requiresMerge ? (
           <button
-            onClick={() => onStartMerge(f.quality, f.qualityLabel)}
+            onClick={() => onStartMerge(f.quality, f.qualityLabel, f.videoStreamUrl || f.url, f.audioStreamUrl)}
             disabled={disabled}
             title={turboMode ? "High-Speed Turbo Download" : "Standard Speed Download"}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-50 ${

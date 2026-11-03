@@ -80,9 +80,10 @@ async function queryInstance(baseUrl: string, videoId: string): Promise<any | nu
 export async function resolveInvidiousVideo(videoId: string): Promise<any | null> {
   // 1. Instant check with primary high-speed instance
   try {
-    const primaryData = await queryInstance("https://yt.chocolatemoo53.com", videoId);
+    const primaryInstance = "https://yt.chocolatemoo53.com";
+    const primaryData = await queryInstance(primaryInstance, videoId);
     if (primaryData && (primaryData.formatStreams || primaryData.adaptiveFormats)) {
-      return mapInvidiousToYtDlp(primaryData, videoId);
+      return mapInvidiousToYtDlp(primaryData, videoId, primaryInstance);
     }
   } catch (e: any) {
     console.warn("[invidiousResolver] Primary instance failed, querying fallback pool...", e?.message);
@@ -97,12 +98,15 @@ export async function resolveInvidiousVideo(videoId: string): Promise<any | null
     const batch = fallbackList.slice(i, i + batchSize);
     try {
       const results = await Promise.allSettled(
-        batch.map((inst) => queryInstance(inst, videoId))
+        batch.map(async (inst) => {
+          const res = await queryInstance(inst, videoId);
+          return { res, inst };
+        })
       );
 
       for (const r of results) {
-        if (r.status === "fulfilled" && r.value) {
-          return mapInvidiousToYtDlp(r.value, videoId);
+        if (r.status === "fulfilled" && r.value?.res) {
+          return mapInvidiousToYtDlp(r.value.res, videoId, r.value.inst);
         }
       }
     } catch {
@@ -116,20 +120,24 @@ export async function resolveInvidiousVideo(videoId: string): Promise<any | null
 /**
  * Transforms Invidious JSON into standard yt-dlp info format expected by app/api/info
  */
-function mapInvidiousToYtDlp(data: any, videoId: string): any {
+function mapInvidiousToYtDlp(data: any, videoId: string, instanceUrl: string): any {
   const rawFormats: any[] = [];
 
   // 1. Combined audio+video streams (formatStreams)
   if (Array.isArray(data.formatStreams)) {
     for (const f of data.formatStreams) {
-      if (!f.url) continue;
+      if (!f.url && !f.itag) continue;
       const resMatch = f.resolution?.match(/(\d+)x(\d+)/) || f.qualityLabel?.match(/(\d+)p/);
       const height = resMatch ? parseInt(resMatch[2] || resMatch[1], 10) : (f.quality === "hd720" ? 720 : 360);
       const isWebm = f.type?.includes("webm");
+      const itag = String(f.itag || "18");
+      // Use Invidious instance proxy stream endpoint to avoid Google IP lock 403
+      const proxyUrl = `${instanceUrl}/latest_version?id=${videoId}&itag=${itag}&local=true`;
 
       rawFormats.push({
-        format_id: String(f.itag || "18"),
-        url: f.url,
+        format_id: itag,
+        url: proxyUrl,
+        directCdnUrl: f.url,
         ext: isWebm ? "webm" : "mp4",
         vcodec: isWebm ? "vp9" : "avc1",
         acodec: isWebm ? "opus" : "mp4a",
@@ -144,10 +152,13 @@ function mapInvidiousToYtDlp(data: any, videoId: string): any {
   // 2. Adaptive separate streams (video-only and audio-only)
   if (Array.isArray(data.adaptiveFormats)) {
     for (const f of data.adaptiveFormats) {
-      if (!f.url) continue;
+      if (!f.url && !f.itag) continue;
       const isVideo = f.type?.startsWith("video");
       const isAudio = f.type?.startsWith("audio");
       const isWebm = f.type?.includes("webm");
+      const itag = String(f.itag || (isVideo ? "137" : "140"));
+      // Use Invidious instance proxy stream endpoint to avoid Google IP lock 403
+      const proxyUrl = `${instanceUrl}/latest_version?id=${videoId}&itag=${itag}&local=true`;
 
       let height: number | null = null;
       if (isVideo) {
@@ -159,8 +170,9 @@ function mapInvidiousToYtDlp(data: any, videoId: string): any {
       const bitrate = f.bitrate ? Math.round(parseInt(f.bitrate, 10) / 1000) : 0;
 
       rawFormats.push({
-        format_id: String(f.itag || (isVideo ? "137" : "140")),
-        url: f.url,
+        format_id: itag,
+        url: proxyUrl,
+        directCdnUrl: f.url,
         ext: isWebm ? "webm" : (isVideo ? "mp4" : "m4a"),
         vcodec: isVideo ? (isWebm ? "vp9" : "avc1") : "none",
         acodec: isAudio ? (isWebm ? "opus" : "mp4a") : "none",

@@ -234,6 +234,8 @@ export async function POST(req: NextRequest) {
           container: 'mp4',
           vcodec: videoFormat.vcodec,
           url: videoFormat.url,
+          videoStreamUrl: videoFormat.url,
+          audioStreamUrl: bestAudio.url,
           hasAudio: true,
           hasVideo: true,
           contentLength: (vSize + aSize).toString(),
@@ -273,6 +275,7 @@ export async function POST(req: NextRequest) {
       title: info.title || "Video",
       thumbnail,
       duration: formatDuration(info.duration || 0),
+      durationSeconds: typeof info.duration === "number" ? info.duration : parseInt(info.duration || "0", 10),
       author: info.uploader || "Unknown",
       videoUrl: videoUrl,
       formats: {

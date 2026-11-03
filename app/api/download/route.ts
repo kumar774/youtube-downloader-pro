@@ -27,10 +27,11 @@ export async function GET(req: NextRequest) {
   try {
     let directCdnUrl = "";
 
-    if (targetUrl.includes("googlevideo.com")) {
+    // Any direct HTTP stream (Invidious latest_version, direct CDN, googlevideo.com)
+    if (targetUrl.startsWith("http") && !targetUrl.includes("youtube.com/watch") && !targetUrl.includes("youtu.be/")) {
       directCdnUrl = targetUrl;
     } else {
-      // Fallback: Resolve YouTube page URL using yt-dlp
+      // Fallback: Resolve YouTube page URL using yt-dlp or Invidious
       if (!itagParam) {
         return NextResponse.json({ error: "Missing itag for YouTube page URL" }, { status: 400 });
       }
@@ -59,14 +60,20 @@ export async function GET(req: NextRequest) {
       directCdnUrl = matchedFormat.url;
     }
 
-    // Proxy the stream from the direct CDN URL
+    // Proxy the stream from the direct CDN / Invidious proxy stream URL
+    const reqRange = req.headers.get("range");
+    const fetchHeaders: Record<string, string> = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    };
+    if (reqRange) {
+      fetchHeaders["Range"] = reqRange;
+    }
+
     const response = await fetch(directCdnUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      },
+      headers: fetchHeaders,
     });
 
-    if (!response.ok) {
+    if (!response.ok && response.status !== 206) {
       return NextResponse.json(
         { error: `Failed to fetch video stream from CDN. Status: ${response.status}` },
         { status: 500 }
@@ -77,15 +84,20 @@ export async function GET(req: NextRequest) {
     const headers = new Headers({
       "Content-Disposition": `attachment; filename="${encodeURIComponent(title)}.${ext}"`,
       "Content-Type": contentType,
+      "Accept-Ranges": "bytes",
     });
 
     const contentLength = response.headers.get("content-length");
     if (contentLength) {
       headers.set("Content-Length", contentLength);
     }
+    const contentRange = response.headers.get("content-range");
+    if (contentRange) {
+      headers.set("Content-Range", contentRange);
+    }
 
     return new NextResponse(response.body, {
-      status: 200,
+      status: response.status === 206 ? 206 : 200,
       headers: headers,
     });
   } catch (error: any) {

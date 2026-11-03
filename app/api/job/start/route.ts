@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createJob, updateJob, getJob } from "@/lib/jobManager";
 import { resolveYtDlpBinary, resolveFfmpegBinary } from "@/lib/binResolver";
 import { ensureNetscapeCookies } from "@/lib/cookieHelper";
+import { resolveInvidiousVideo } from "@/lib/invidiousResolver";
 import cp from "child_process";
 import path from "path";
 import fs from "fs";
@@ -20,11 +21,19 @@ function formatSpeed(speedStr: string): string {
     .replace(/GiB\/s/gi, "GB/s");
 }
 
+function extractVideoId(url: string): string | null {
+  const match = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([A-Za-z0-9_-]{11})/);
+  return match ? match[1] : null;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const {
+    let {
       url,
+      videoStreamUrl,
+      audioStreamUrl,
+      durationSeconds,
       title,
       artist,
       format,
@@ -37,7 +46,7 @@ export async function POST(req: NextRequest) {
       clipEnd,
     } = body;
 
-    if (!url) {
+    if (!url && !videoStreamUrl && !audioStreamUrl) {
       return NextResponse.json({ error: "Missing url parameter" }, { status: 400 });
     }
 
@@ -69,6 +78,160 @@ export async function POST(req: NextRequest) {
 
     job.tempFilePath = tempFilePath;
 
+    // If stream URLs are not provided, attempt automatic resolution via Invidious distributed engine
+    if (url && (!videoStreamUrl || !audioStreamUrl)) {
+      const vidId = extractVideoId(url);
+      if (vidId) {
+        try {
+          const invData = await resolveInvidiousVideo(vidId);
+          if (invData?.formats?.length) {
+            if (!durationSeconds && invData.duration) {
+              durationSeconds = parseInt(invData.duration, 10);
+            }
+            if (type === "convert" && !audioStreamUrl) {
+              const aFormat = invData.formats.find((f: any) => f.acodec !== "none" && f.vcodec === "none");
+              if (aFormat?.url) audioStreamUrl = aFormat.url;
+            } else if (type === "merge") {
+              if (!videoStreamUrl) {
+                // Find matching video format or best video
+                const vFormat = invData.formats.find((f: any) => f.vcodec !== "none");
+                if (vFormat?.url) videoStreamUrl = vFormat.url;
+              }
+              if (!audioStreamUrl) {
+                const aFormat = invData.formats.find((f: any) => f.acodec !== "none" && f.vcodec === "none");
+                if (aFormat?.url) audioStreamUrl = aFormat.url;
+              }
+            }
+          }
+        } catch (e: any) {
+          console.warn("[/api/job/start] Fallback Invidious stream lookup error:", e?.message);
+        }
+      }
+    }
+
+    const ffmpegBin = finalFfmpegPath || (process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
+    const canUseDirectFfmpeg =
+      (type === "convert" && !!audioStreamUrl) ||
+      (type === "merge" && !!videoStreamUrl && !!audioStreamUrl);
+
+    if (canUseDirectFfmpeg) {
+      // ══════════════════════════════════════════════════════════════
+      // High-Speed Direct FFmpeg Engine (Bypasses YouTube 429 Bot Check)
+      // ══════════════════════════════════════════════════════════════
+      let ffmpegArgs: string[] = [];
+
+      if (type === "convert") {
+        ffmpegArgs = [
+          "-y",
+          ...(clipStart && clipEnd ? ["-ss", clipStart, "-to", clipEnd] : []),
+          "-i",
+          audioStreamUrl,
+          "-vn",
+          "-c:a",
+          "libmp3lame",
+          "-b:a",
+          bitrate,
+          "-id3v2_version",
+          "3",
+          "-metadata",
+          `title=${(title || "Audio").replace(/"/g, "")}`,
+          "-metadata",
+          `artist=${(artist || "YouTube").replace(/"/g, "")}`,
+          tempFilePath,
+        ];
+      } else {
+        ffmpegArgs = [
+          "-y",
+          ...(clipStart && clipEnd ? ["-ss", clipStart, "-to", clipEnd] : []),
+          "-i",
+          videoStreamUrl,
+          "-i",
+          audioStreamUrl,
+          "-c:v",
+          "copy",
+          "-c:a",
+          "aac",
+          "-movflags",
+          "+faststart",
+          tempFilePath,
+        ];
+      }
+
+      console.log(`[Job ${jobId}] Spawning direct FFmpeg: ${ffmpegBin}`);
+      updateJob(jobId, {
+        status: "downloading",
+        percent: 15,
+        stage: type === "convert" ? "Streaming audio to MP3 encoder..." : "Streaming video & audio muxer...",
+      });
+
+      const child = cp.spawn(/*turbopackIgnore: true*/ ffmpegBin, ffmpegArgs, { windowsHide: true });
+      job.childProcess = child;
+
+      let stderrOutput = "";
+      child.stderr.on("data", (data: Buffer) => {
+        const text = data.toString();
+        stderrOutput += text;
+
+        const timeMatch = text.match(/time=([0-9:.]+)/);
+        const speedMatch = text.match(/speed=\s*([0-9.]+x)/);
+        if (timeMatch) {
+          const parts = timeMatch[1].split(":");
+          let sec = 0;
+          if (parts.length === 3) {
+            sec = parseFloat(parts[0]) * 3600 + parseFloat(parts[1]) * 60 + parseFloat(parts[2]);
+          } else if (parts.length === 2) {
+            sec = parseFloat(parts[0]) * 60 + parseFloat(parts[1]);
+          }
+
+          const total = durationSeconds && durationSeconds > 0 ? durationSeconds : 240;
+          const pct = Math.min(Math.max(Math.round((sec / total) * 95), 20), 95);
+          updateJob(jobId, {
+            status: "merging",
+            percent: pct,
+            speed: speedMatch ? speedMatch[1] : "Turbo",
+            stage:
+              type === "convert"
+                ? `Encoding MP3 (${pct}%)...`
+                : `Muxing High Quality MP4 (${pct}%)...`,
+          });
+        }
+      });
+
+      child.on("close", (code: number) => {
+        const current = getJob(jobId);
+        if (current?.status === "cancelled") return;
+
+        if (code === 0 && fs.existsSync(tempFilePath)) {
+          updateJob(jobId, {
+            status: "completed",
+            percent: 100,
+            stage: "Ready for download!",
+          });
+        } else {
+          console.error(`[Job ${jobId}] FFmpeg failed with exit code ${code}:`, stderrOutput);
+          updateJob(jobId, {
+            status: "failed",
+            error: stderrOutput.slice(-300) || `FFmpeg process exited with code ${code}`,
+            stage: "Processing failed",
+          });
+        }
+      });
+
+      child.on("error", (err: Error) => {
+        console.error(`[Job ${jobId}] FFmpeg error:`, err);
+        updateJob(jobId, {
+          status: "failed",
+          error: err.message,
+          stage: "FFmpeg process error",
+        });
+      });
+
+      return NextResponse.json({ jobId });
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Standard yt-dlp Child Process Engine (Fallback)
+    // ══════════════════════════════════════════════════════════════
     let args: string[] = [];
 
     const turboArgs = turbo
@@ -144,7 +307,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Spawn child process
-    const child = cp.spawn(binPath, args, {
+    const child = cp.spawn(/*turbopackIgnore: true*/ binPath, args, {
       windowsHide: true,
     });
 
@@ -235,4 +398,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
