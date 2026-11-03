@@ -1,14 +1,20 @@
 # Multi-stage production build for Next.js with yt-dlp and ffmpeg
 FROM node:20-bookworm-slim AS base
 
-# Install system dependencies: Python3, ffmpeg, curl
+# Install system dependencies: Python3, ffmpeg, curl, unzip
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     ffmpeg \
     curl \
+    unzip \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Deno globally (yt-dlp official JS runtime for YouTube challenge solving)
+RUN curl -fsSL https://deno.land/install.sh | sh -s -- -y \
+    && cp /root/.deno/bin/deno /usr/local/bin/deno \
+    && chmod a+rx /usr/local/bin/deno
 
 # Install latest yt-dlp globally
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \

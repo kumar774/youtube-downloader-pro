@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       noWarnings: true,
       noCheckCertificates: true,
       preferFreeFormats: true,
-      jsRuntimes: 'node',
+      jsRuntimes: process.platform === "linux" ? "deno" : "node",
     };
 
     if (cookiesPath) {
@@ -67,18 +67,18 @@ export async function POST(req: NextRequest) {
     try {
       info = await youtubedl(videoUrl, ytOptions as any);
     } catch (primaryErr: any) {
-      console.warn("[/api/info] Primary extraction failed, trying iOS/Android client fallback...");
+      console.warn("[/api/info] Primary extraction failed, trying iOS/Android client fallback with player_skip=webpage...");
       try {
         info = await youtubedl(videoUrl, {
           ...ytOptions,
-          extractorArgs: "youtube:player_client=ios,android,tv",
+          extractorArgs: "youtube:player_client=ios,android,tv;player_skip=webpage",
         } as any);
       } catch (secErr: any) {
         console.warn("[/api/info] Second fallback failed, trying mweb client...");
         try {
           info = await youtubedl(videoUrl, {
             ...ytOptions,
-            extractorArgs: "youtube:player_client=mweb,tv_embedded",
+            extractorArgs: "youtube:player_client=mweb,tv_embedded;player_skip=webpage",
           } as any);
         } catch {
           throw primaryErr;

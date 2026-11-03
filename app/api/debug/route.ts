@@ -22,7 +22,9 @@ export async function GET(req: NextRequest) {
       "--verbose",
       "--no-check-certificates",
       "--js-runtimes",
-      "node",
+      process.platform === "linux" ? "deno" : "node",
+      "--extractor-args",
+      "youtube:player_client=ios,android,tv;player_skip=webpage",
     ];
 
     if (cookiesPath) {
