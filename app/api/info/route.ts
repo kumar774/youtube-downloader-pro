@@ -30,6 +30,7 @@ const youtubedl = create(binPath);
 
 /* ── POST /api/info ─────────────────────────── */
 export async function POST(req: NextRequest) {
+  let cookiesPath: string | null = null;
   try {
     const body = await req.json();
     const url: string | undefined = body?.url;
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
 
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-    const cookiesPath = ensureNetscapeCookies();
+    cookiesPath = ensureNetscapeCookies();
     const ytOptions: Record<string, any> = {
       dumpJson: true,
       noWarnings: true,
@@ -64,21 +65,21 @@ export async function POST(req: NextRequest) {
     // Extract using youtube-dl-exec with automatic client fallback
     let info: any = null;
     try {
-      info = await youtubedl(videoUrl, ytOptions);
+      info = await youtubedl(videoUrl, ytOptions as any);
     } catch (primaryErr: any) {
       console.warn("[/api/info] Primary extraction failed, trying iOS/Android client fallback...");
       try {
         info = await youtubedl(videoUrl, {
           ...ytOptions,
           extractorArgs: "youtube:player_client=ios,android,tv",
-        });
+        } as any);
       } catch (secErr: any) {
         console.warn("[/api/info] Second fallback failed, trying mweb client...");
         try {
           info = await youtubedl(videoUrl, {
             ...ytOptions,
             extractorArgs: "youtube:player_client=mweb,tv_embedded",
-          });
+          } as any);
         } catch {
           throw primaryErr;
         }
