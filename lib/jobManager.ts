@@ -14,6 +14,10 @@ export interface JobState {
   eta?: string;
   error?: string;
   tempFilePath?: string;
+  downloadedBytes?: number;
+  totalBytes?: number;
+  activeChunks?: number;
+  totalChunks?: number;
   childProcess?: any;
   listeners: Set<(data: Partial<JobState>) => void>;
   createdAt: number;

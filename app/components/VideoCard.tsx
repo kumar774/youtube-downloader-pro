@@ -48,6 +48,7 @@ export interface VideoInfo {
   formats: {
     directWithAudio?: FormatInfo[];
     cinemaMerged?: FormatInfo[];
+    standardMerged?: FormatInfo[];
     withAudio: FormatInfo[];
     withoutAudio?: FormatInfo[];
     audioOnly: FormatInfo[];
@@ -58,8 +59,12 @@ export interface VideoInfo {
 /* ── Helpers ────────────────────────────────── */
 function fileSize(bytes?: string) {
   if (!bytes) return "";
-  const mb = parseInt(bytes, 10) / (1024 * 1024);
-  return mb >= 1 ? `${mb.toFixed(1)} MB` : `${(mb * 1024).toFixed(0)} KB`;
+  const b = parseInt(bytes, 10);
+  if (isNaN(b) || b <= 0) return "";
+  const gb = b / (1024 * 1024 * 1024);
+  if (gb >= 1) return `${gb.toFixed(2)} GB`;
+  const mb = b / (1024 * 1024);
+  return mb >= 1 ? `${mb.toFixed(1)} MB` : `${(b / 1024).toFixed(0)} KB`;
 }
 
 function sanitizeFilename(title: string) {
@@ -92,19 +97,14 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
     title: string;
     thumbnail?: string;
     qualityLabel?: string;
+    totalSizeText?: string;
   } | null>(null);
   const [startingJob, setStartingJob] = useState(false);
 
   // Groupings
-  const directFormats =
-    info.formats?.directWithAudio?.length
-      ? info.formats.directWithAudio
-      : (info.formats?.withAudio || []).filter((f) => !f.requiresMerge);
-
-  const cinemaFormats =
-    info.formats?.cinemaMerged?.length
-      ? info.formats.cinemaMerged
-      : (info.formats?.withAudio || []).filter((f) => f.requiresMerge);
+  const directFormats = info.formats?.directWithAudio || [];
+  const cinemaFormats = info.formats?.cinemaMerged || [];
+  const standardFormats = info.formats?.standardMerged || [];
 
   const audioOnly = info.formats?.audioOnly || [];
   const subtitlesList =
@@ -121,13 +121,15 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
     formatId: string,
     qualityLabel: string,
     videoStreamUrl?: string,
-    audioStreamUrl?: string
+    audioStreamUrl?: string,
+    contentLength?: string
   ) => {
     if (startingJob) return;
     setStartingJob(true);
 
     try {
       const formatSelector = formatId.includes("+") ? formatId : `${formatId}+bestaudio`;
+      const sizeText = fileSize(contentLength);
       const res = await fetch("/api/job/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -135,6 +137,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
           url: info.videoUrl,
           videoStreamUrl,
           audioStreamUrl,
+          contentLength,
           title: info.title,
           artist: info.author,
           format: formatSelector,
@@ -155,6 +158,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
           title: info.title,
           thumbnail: info.thumbnail,
           qualityLabel: qualityLabel,
+          totalSizeText: sizeText,
         });
       } else {
         alert(data.error || "Failed to start download job");
@@ -174,6 +178,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
     try {
       const bestAudio = audioOnly[0];
       const audioStreamUrl = bestAudio?.url;
+      const sizeText = fileSize(bestAudio?.contentLength);
 
       const res = await fetch("/api/job/start", {
         method: "POST",
@@ -181,6 +186,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
         body: JSON.stringify({
           url: info.videoUrl,
           audioStreamUrl,
+          contentLength: bestAudio?.contentLength,
           title: info.title,
           artist: info.author,
           type: "convert",
@@ -201,6 +207,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
           title: info.title,
           thumbnail: info.thumbnail,
           qualityLabel: `MP3 ${bitrate.replace("k", " kbps")}`,
+          totalSizeText: sizeText,
         });
       } else {
         alert(data.error || "Failed to start audio conversion job");
@@ -419,14 +426,14 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
           )}
 
           {/* ══════════════════════════════════════════════════════════════
-              SECTION 2: Cinema Full HD & 4K (Auto-Merged with Audio)
+              SECTION 2: Cinema & Ultra HD (1080p to 8K Auto-Merged)
              ══════════════════════════════════════════════════════════════ */}
           {cinemaFormats.length > 0 && (
             <div className="mb-7">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-blue-400">
                   <Film className="h-4 w-4 text-blue-400" />
-                  Cinema Full HD & 4K (Auto-Merged with Audio) 🎬
+                  Cinema & Ultra HD (1080p to 8K Auto-Merged) 🎬
                 </h3>
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
                   FFmpeg Muxer
@@ -465,6 +472,36 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════
+              SECTION 3: Standard & Mobile (720p - 144p Auto-Merged)
+             ══════════════════════════════════════════════════════════════ */}
+          {standardFormats.length > 0 && (
+            <div className="mb-7">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-indigo-400">
+                  <Film className="h-4 w-4 text-indigo-400" />
+                  Standard & Mobile (720p – 144p Auto-Merged) 📱
+                </h3>
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  Full Audio
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                {standardFormats.map((f, i) => (
+                  <FormatRow
+                    key={`std-${i}`}
+                    f={f}
+                    title={info.title}
+                    variant="indigo"
+                    onStartMerge={handleStartMerge}
+                    disabled={startingJob}
+                    turboMode={turboMode}
+                  />
+                ))}
+              </div>
             </div>
           )}
 
@@ -625,6 +662,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
           title={activeJob.title}
           thumbnail={activeJob.thumbnail}
           qualityLabel={activeJob.qualityLabel}
+          totalSizeText={activeJob.totalSizeText}
           onClose={() => setActiveJob(null)}
         />
       )}
@@ -643,18 +681,24 @@ function FormatRow({
 }: {
   f: FormatInfo;
   title: string;
-  variant: "green" | "blue" | "purple";
+  variant: "green" | "blue" | "indigo" | "purple";
   onStartMerge: (
     quality: string,
     label: string,
     videoStreamUrl?: string,
-    audioStreamUrl?: string
+    audioStreamUrl?: string,
+    contentLength?: string
   ) => void;
   disabled?: boolean;
   turboMode?: boolean;
 }) {
   const size = fileSize(f.contentLength);
   const label = `${f.qualityLabel || f.quality} · ${f.container.toUpperCase()}`;
+
+  const mergeButtonGradient =
+    variant === "indigo"
+      ? "bg-gradient-to-r from-indigo-600 to-slate-700 hover:from-indigo-500 hover:to-slate-600 text-white shadow-[0_0_15px_rgba(99,102,241,0.35)]"
+      : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.35)]";
 
   return (
     <div className="group flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] px-3.5 py-3 transition-colors hover:border-white/10 hover:bg-white/[0.04]">
@@ -675,7 +719,8 @@ function FormatRow({
                 f.quality,
                 f.qualityLabel,
                 f.videoStreamUrl || f.url,
-                f.audioStreamUrl
+                f.audioStreamUrl,
+                f.contentLength
               )
             }
             disabled={disabled}
@@ -684,7 +729,7 @@ function FormatRow({
                 ? "High-Speed Turbo FFmpeg Merge"
                 : "Standard Speed FFmpeg Merge"
             }
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.35)] disabled:opacity-50"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${mergeButtonGradient} disabled:opacity-50`}
           >
             {turboMode ? (
               <>

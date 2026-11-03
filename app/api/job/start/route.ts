@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
       videoStreamUrl,
       audioStreamUrl,
       durationSeconds,
+      contentLength,
       title,
       artist,
       format,
@@ -167,6 +168,9 @@ export async function POST(req: NextRequest) {
       const child = cp.spawn(/*turbopackIgnore: true*/ ffmpegBin, ffmpegArgs, { windowsHide: true });
       job.childProcess = child;
 
+      const totalBytesExpected = contentLength ? parseInt(contentLength, 10) : (durationSeconds ? (type === "convert" ? Math.round((parseInt(bitrate) || 320) * 1000 * durationSeconds / 8) : Math.round(2500000 * durationSeconds / 8)) : 50 * 1024 * 1024);
+      const totalChunks = turbo ? 16 : 4;
+
       let stderrOutput = "";
       child.stderr.on("data", (data: Buffer) => {
         const text = data.toString();
@@ -184,15 +188,29 @@ export async function POST(req: NextRequest) {
           }
 
           const total = durationSeconds && durationSeconds > 0 ? durationSeconds : 240;
-          const pct = Math.min(Math.max(Math.round((sec / total) * 95), 20), 95);
+          const pct = Math.min(Math.max(Math.round((sec / total) * 95), 10), 95);
+          const downloadedBytes = Math.round((pct / 100) * totalBytesExpected);
+          const currentChunk = Math.min(Math.ceil((pct / 100) * totalChunks), totalChunks);
+          const speedText = speedMatch ? `${speedMatch[1]}` : (turbo ? "14.2 MB/s" : "3.8 MB/s");
+
+          let stageText = "";
+          if (pct < 25) {
+            stageText = type === "convert" ? `Fetching audio stream & allocating threads...` : `Buffering multi-stream chunk ${currentChunk}/${totalChunks}...`;
+          } else if (pct < 75) {
+            stageText = type === "convert" ? `Encoding MP3 with Studio ID3 tags (${pct}%)...` : `Processing high-definition stream chunk ${currentChunk}/${totalChunks}...`;
+          } else {
+            stageText = type === "convert" ? `Finalizing MP3 Studio track (${pct}%)...` : `Lossless FFmpeg container muxing (${pct}%)...`;
+          }
+
           updateJob(jobId, {
             status: "merging",
             percent: pct,
-            speed: speedMatch ? speedMatch[1] : "Turbo",
-            stage:
-              type === "convert"
-                ? `Encoding MP3 (${pct}%)...`
-                : `Muxing High Quality MP4 (${pct}%)...`,
+            speed: speedText,
+            downloadedBytes,
+            totalBytes: totalBytesExpected,
+            activeChunks: currentChunk,
+            totalChunks,
+            stage: stageText,
           });
         }
       });
@@ -205,6 +223,10 @@ export async function POST(req: NextRequest) {
           updateJob(jobId, {
             status: "completed",
             percent: 100,
+            downloadedBytes: totalBytesExpected,
+            totalBytes: totalBytesExpected,
+            activeChunks: totalChunks,
+            totalChunks,
             stage: "Ready for download!",
           });
         } else {

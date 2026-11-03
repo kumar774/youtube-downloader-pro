@@ -210,7 +210,9 @@ export async function POST(req: NextRequest) {
     const directWithAudio: any[] = withAudio.filter(f => !f.requiresMerge);
 
     // 2. High-definition DASH streams (1080p, 1440p, 4K, 8K) auto-merged with best audio
+    // 3. Standard & Mobile DASH streams (720p, 480p, 360p, 240p, 144p) auto-merged with best audio
     const cinemaMerged: any[] = [];
+    const standardMerged: any[] = [];
     const candidatesByLabel = new Map<string, any>();
     const sortedCandidates = [...withoutAudio].sort((a, b) => {
       if (a.container === 'mp4' && b.container !== 'mp4') return -1;
@@ -224,12 +226,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const directHeights = new Set(
+      directWithAudio.map(f => {
+        const m = f.qualityLabel.match(/(\d+)p/);
+        return m ? parseInt(m[1], 10) : 0;
+      })
+    );
+
     candidatesByLabel.forEach((videoFormat, label) => {
       if (bestAudio) {
         const vSize = parseInt(videoFormat.contentLength || "0", 10);
         const aSize = parseInt(bestAudio.contentLength || "0", 10);
+        const resMatch = videoFormat.qualityLabel.match(/(\d+)p/i) || videoFormat.qualityLabel.match(/^(\d+)/);
+        const height = resMatch ? parseInt(resMatch[1], 10) : 0;
         
-        cinemaMerged.push({
+        const mergedItem = {
           itag: videoFormat.itag,
           quality: `${videoFormat.quality}+${bestAudio.quality}`,
           qualityLabel: videoFormat.qualityLabel,
@@ -242,7 +253,16 @@ export async function POST(req: NextRequest) {
           hasVideo: true,
           contentLength: (vSize + aSize).toString(),
           requiresMerge: true,
-        });
+        };
+
+        if (height >= 1080) {
+          cinemaMerged.push(mergedItem);
+        } else {
+          const isHighFps = videoFormat.qualityLabel.includes("60");
+          if (!directHeights.has(height) || isHighFps) {
+            standardMerged.push(mergedItem);
+          }
+        }
       }
     });
 
@@ -257,6 +277,7 @@ export async function POST(req: NextRequest) {
     
     directWithAudio.sort((a, b) => parseQualityScore(b.qualityLabel) - parseQualityScore(a.qualityLabel));
     cinemaMerged.sort((a, b) => parseQualityScore(b.qualityLabel) - parseQualityScore(a.qualityLabel));
+    standardMerged.sort((a, b) => parseQualityScore(b.qualityLabel) - parseQualityScore(a.qualityLabel));
     
     audioOnly.sort((a, b) => {
       if (a.container !== b.container) {
@@ -277,8 +298,9 @@ export async function POST(req: NextRequest) {
       formats: {
         directWithAudio,
         cinemaMerged,
+        standardMerged,
         audioOnly,
-        withAudio: [...directWithAudio, ...cinemaMerged],
+        withAudio: [...directWithAudio, ...cinemaMerged, ...standardMerged],
         withoutAudio: [], // Muted section eliminated completely
       },
       subtitles: info.captions || [],

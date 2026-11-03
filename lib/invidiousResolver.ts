@@ -117,11 +117,33 @@ export async function resolveInvidiousVideo(videoId: string): Promise<any | null
   return null;
 }
 
+function parseByteSize(f: any, lengthSeconds?: number): number {
+  if (f.clen) {
+    const clen = parseInt(f.clen, 10);
+    if (!isNaN(clen) && clen > 0) return clen;
+  }
+  if (typeof f.size === "number" && f.size > 0) {
+    return f.size;
+  }
+  if (typeof f.size === "string" && !f.size.includes("x")) {
+    const s = parseInt(f.size, 10);
+    if (!isNaN(s) && s > 0) return s;
+  }
+  if (f.bitrate && lengthSeconds && lengthSeconds > 0) {
+    const br = parseInt(f.bitrate, 10);
+    if (!isNaN(br) && br > 0) {
+      return Math.round((br * lengthSeconds) / 8);
+    }
+  }
+  return 0;
+}
+
 /**
  * Transforms Invidious JSON into standard yt-dlp info format expected by app/api/info
  */
 function mapInvidiousToYtDlp(data: any, videoId: string, instanceUrl: string): any {
   const rawFormats: any[] = [];
+  const lengthSeconds = data.lengthSeconds ? parseInt(data.lengthSeconds, 10) : undefined;
 
   // 1. Combined audio+video streams (formatStreams)
   if (Array.isArray(data.formatStreams)) {
@@ -133,6 +155,7 @@ function mapInvidiousToYtDlp(data: any, videoId: string, instanceUrl: string): a
       const itag = String(f.itag || "18");
       // Use Invidious instance proxy stream endpoint to avoid Google IP lock 403
       const proxyUrl = `${instanceUrl}/latest_version?id=${videoId}&itag=${itag}&local=true`;
+      const rawSize = parseByteSize(f, lengthSeconds);
 
       rawFormats.push({
         format_id: itag,
@@ -143,7 +166,8 @@ function mapInvidiousToYtDlp(data: any, videoId: string, instanceUrl: string): a
         acodec: isWebm ? "opus" : "mp4a",
         height: height,
         fps: f.fps || 30,
-        filesize: f.size ? parseInt(f.size, 10) : (f.clen ? parseInt(f.clen, 10) : 0),
+        filesize: rawSize,
+        filesize_approx: rawSize,
         format_note: f.qualityLabel || `${height}p`,
       });
     }
@@ -166,7 +190,7 @@ function mapInvidiousToYtDlp(data: any, videoId: string, instanceUrl: string): a
         height = resMatch ? parseInt(resMatch[2] || resMatch[1], 10) : (parseInt(f.qualityLabel, 10) || 720);
       }
 
-      const rawSize = f.size ? parseInt(f.size, 10) : (f.clen ? parseInt(f.clen, 10) : 0);
+      const rawSize = parseByteSize(f, lengthSeconds);
       const bitrate = f.bitrate ? Math.round(parseInt(f.bitrate, 10) / 1000) : 0;
 
       rawFormats.push({
