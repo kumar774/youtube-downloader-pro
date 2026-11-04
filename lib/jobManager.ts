@@ -1,4 +1,6 @@
 import fs from "fs";
+import os from "os";
+import path from "path";
 
 export interface JobState {
   id: string;
@@ -27,6 +29,33 @@ export interface JobState {
 const globalJobs = (globalThis as any).__YT_JOBS || new Map<string, JobState>();
 (globalThis as any).__YT_JOBS = globalJobs;
 
+// Periodic automatic disk storage protection sweeper (Every 60s, purges temp files > 5 mins old)
+if (!(globalThis as any).__YT_SWEEPER_INIT) {
+  (globalThis as any).__YT_SWEEPER_INIT = true;
+  setInterval(() => {
+    try {
+      const tmpDir = os.tmpdir();
+      const files = fs.readdirSync(tmpDir);
+      const now = Date.now();
+      const MAX_AGE = 5 * 60 * 1000; // 5 minutes max life
+      for (const file of files) {
+        if (file.startsWith("ytdl-")) {
+          const fullPath = path.join(tmpDir, file);
+          try {
+            const stat = fs.statSync(fullPath);
+            if (now - stat.mtimeMs > MAX_AGE) {
+              fs.unlinkSync(fullPath);
+              console.log(`[Storage Guard] Safely removed expired temp file: ${file}`);
+            }
+          } catch {}
+        }
+      }
+    } catch (e) {
+      // Ignore background sweep errors
+    }
+  }, 60_000);
+}
+
 export function createJob(params: {
   id: string;
   type: "merge" | "convert";
@@ -44,7 +73,7 @@ export function createJob(params: {
     turbo: params.turbo ?? true,
     status: "starting",
     percent: 0,
-    stage: "Connecting to server...",
+    stage: "Connecting to stream...",
     listeners: new Set(),
     createdAt: Date.now(),
   };
@@ -64,7 +93,7 @@ export function updateJob(id: string, updates: Partial<JobState>) {
 
   Object.assign(job, updates);
 
-  // Notify all SSE subscribers
+  // Notify all SSE subscribers with full live telemetry
   const payload = {
     id: job.id,
     status: job.status,
@@ -74,6 +103,10 @@ export function updateJob(id: string, updates: Partial<JobState>) {
     eta: job.eta,
     error: job.error,
     turbo: job.turbo,
+    activeChunks: job.activeChunks,
+    totalChunks: job.totalChunks,
+    downloadedBytes: job.downloadedBytes,
+    totalBytes: job.totalBytes,
   };
 
   job.listeners.forEach((listener: (data: any) => void) => {
@@ -125,7 +158,7 @@ export function cleanupJob(id: string) {
 
 function cleanupOldJobs() {
   const now = Date.now();
-  const TTL = 15 * 60 * 1000; // 15 minutes
+  const TTL = 10 * 60 * 1000; // 10 minutes
 
   for (const [id, job] of globalJobs.entries()) {
     if (now - job.createdAt > TTL) {

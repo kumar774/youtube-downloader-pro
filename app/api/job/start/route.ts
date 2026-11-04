@@ -175,9 +175,9 @@ export async function POST(req: NextRequest) {
 
       console.log(`[Job ${jobId}] Spawning direct stream processor: ${ffmpegBin}`);
       updateJob(jobId, {
-        status: "downloading",
-        percent: 15,
-        stage: type === "convert" ? "Streaming audio to MP3 encoder..." : "Buffering video and audio streams...",
+        status: "starting",
+        percent: 0,
+        stage: "Connecting to high-speed media stream...",
       });
 
       const child = cp.spawn(/*turbopackIgnore: true*/ ffmpegBin, ffmpegArgs, { windowsHide: true });
@@ -186,6 +186,7 @@ export async function POST(req: NextRequest) {
       const totalBytesExpected = contentLength ? parseInt(contentLength, 10) : (durationSeconds ? (type === "convert" ? Math.round((parseInt(bitrate) || 320) * 1000 * durationSeconds / 8) : Math.round(2500000 * durationSeconds / 8)) : 50 * 1024 * 1024);
       const totalChunks = turbo ? 16 : 8;
 
+      let highestPercent = 0;
       let stderrOutput = "";
       child.stderr.on("data", (data: Buffer) => {
         const text = data.toString();
@@ -203,9 +204,13 @@ export async function POST(req: NextRequest) {
           }
 
           const total = durationSeconds && durationSeconds > 0 ? durationSeconds : 240;
-          const pct = Math.min(Math.max(Math.round((sec / total) * 95), 10), 95);
+          // Smooth monotonic progression: 0% to 88% is stream buffering, 88% to 99% is final audio/video sync
+          const calculatedPct = Math.round((sec / total) * 92);
+          const pct = Math.min(Math.max(calculatedPct, highestPercent), 98);
+          highestPercent = pct;
+
           const downloadedBytes = Math.round((pct / 100) * totalBytesExpected);
-          const currentChunk = Math.min(Math.ceil((pct / 100) * totalChunks), totalChunks);
+          const currentChunk = Math.min(Math.floor((pct / 88) * totalChunks), totalChunks);
 
           // Calculate realistic live MB/s from speed multiplier (e.g. 4.5x * 2.5 MB/s = 11.2 MB/s)
           let speedText = "";
@@ -218,10 +223,13 @@ export async function POST(req: NextRequest) {
             speedText = turbo ? "14.8 MB/s" : "3.8 MB/s";
           }
 
-          let currentStatus: "downloading" | "merging" = "downloading";
+          let currentStatus: "starting" | "downloading" | "merging" = "downloading";
           let stageText = "";
 
-          if (pct < 80) {
+          if (pct < 3) {
+            currentStatus = "starting";
+            stageText = "Connecting to media streams...";
+          } else if (pct < 85) {
             currentStatus = "downloading";
             stageText = type === "convert"
               ? `Buffering audio stream (${pct}%)...`

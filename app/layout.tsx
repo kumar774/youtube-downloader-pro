@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -8,11 +8,18 @@ const inter = Inter({
   display: "swap",
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
 export const metadata: Metadata = {
-  title: "SnapSave — Ultra-Fast YouTube Downloader",
+  title: "SnapSave — Ultra-Fast Media Downloader",
   description:
-    "Download YouTube videos at maximum speed. Blazing-fast downloads in high quality MP4, WebM, and MP3 formats.",
-  keywords: ["youtube downloader", "video downloader", "mp4", "mp3", "hd download"],
+    "Download YouTube, Instagram, and Facebook videos at maximum speed. Blazing-fast downloads in high quality MP4, WebM, and MP3 formats.",
+  keywords: ["youtube downloader", "instagram downloader", "facebook downloader", "video downloader", "mp4", "mp3", "hd download"],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

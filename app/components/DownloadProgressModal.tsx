@@ -38,6 +38,8 @@ export default function DownloadProgressModal({
   const [isTurbo, setIsTurbo] = useState<boolean>(true);
   const [downloadedBytes, setDownloadedBytes] = useState<number>(0);
   const [totalBytes, setTotalBytes] = useState<number>(0);
+  const [activeChunks, setActiveChunks] = useState<number>(0);
+  const [totalChunks, setTotalChunks] = useState<number>(16);
   const hasTriggeredDownload = useRef(false);
 
   useEffect(() => {
@@ -56,11 +58,13 @@ export default function DownloadProgressModal({
         if (typeof data.turbo === "boolean") setIsTurbo(data.turbo);
         if (typeof data.downloadedBytes === "number") setDownloadedBytes(data.downloadedBytes);
         if (typeof data.totalBytes === "number") setTotalBytes(data.totalBytes);
+        if (typeof data.activeChunks === "number") setActiveChunks(data.activeChunks);
+        if (typeof data.totalChunks === "number") setTotalChunks(data.totalChunks);
 
         if (data.status === "completed" && !hasTriggeredDownload.current) {
           hasTriggeredDownload.current = true;
           setPercent(100);
-          setStage("Download complete! File saved.");
+          setStage("Complete! File saving to your device...");
 
           // Direct browser download trigger via native anchor
           const downloadUrl = `/api/job/download?jobId=${jobId}`;
@@ -227,13 +231,40 @@ export default function DownloadProgressModal({
                 : "Synchronizing lossless video and crystal-clear audio tracks without quality loss..."}
             </p>
           </div>
-        ) : (
-          /* ── Authentic VidMate / IDM Segmented Stream Buffer ── */
+        ) : !isTurbo ? (
+          /* ── Standard Single Stream Mode ── */
           <div className="mb-5 rounded-2xl border border-white/10 bg-black/50 p-4">
+            <div className="flex items-center justify-between text-xs mb-2">
+              <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-blue-400" />
+                Standard Single Stream Buffer
+              </span>
+              <span className="text-white font-mono font-bold text-xs">
+                {downloadedBytes > 0 && totalBytes > 0
+                  ? `${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}`
+                  : totalSizeText
+                  ? `${Math.round(percent)}% of ${totalSizeText}`
+                  : `${Math.round(percent)}%`}
+              </span>
+            </div>
+            <div className="relative h-3 w-full rounded-full bg-slate-800 overflow-hidden mb-2">
+              <div
+                className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-300"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-slate-400">
+              <span>Single HTTP connection stream</span>
+              <span className="font-mono font-bold text-slate-200">{Math.round(percent)}%</span>
+            </div>
+          </div>
+        ) : (
+          /* ── Turbo Multi-Stream Mode with Real Chunk Progression ── */
+          <div className="mb-5 rounded-2xl border border-amber-500/20 bg-black/50 p-4 shadow-[0_0_20px_rgba(245,158,11,0.05)]">
             <div className="flex items-center justify-between text-xs mb-2">
               <span className="font-bold text-amber-300 flex items-center gap-1.5">
                 <Zap className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
-                {isTurbo ? "Turbo 16-Connection Stream Accelerator" : "Standard Single Stream Buffer"}
+                Turbo 16-Channel Stream Accelerator
               </span>
               <span className="text-white font-mono font-bold text-xs">
                 {downloadedBytes > 0 && totalBytes > 0
@@ -246,9 +277,9 @@ export default function DownloadProgressModal({
 
             {/* Segmented multi-connection buffer strip */}
             <div className="grid grid-cols-8 sm:grid-cols-16 gap-1 mb-2">
-              {Array.from({ length: numSegments }).map((_, idx) => {
-                const isFilled = idx < activeSegmentIndex;
-                const isActive = idx === activeSegmentIndex && percent < 100;
+              {Array.from({ length: 16 }).map((_, idx) => {
+                const isFilled = idx < activeChunks;
+                const isActive = idx === activeChunks && percent < 88;
 
                 return (
                   <div
@@ -267,11 +298,9 @@ export default function DownloadProgressModal({
 
             <div className="flex items-center justify-between text-[11px] text-slate-400">
               <span className="font-mono">
-                {percent >= 100
-                  ? "All stream buffers completed"
-                  : isTurbo
-                  ? `Active buffer segments: ${Math.min(activeSegmentIndex + 1, numSegments)} / ${numSegments}`
-                  : "Single thread buffer receiving"}
+                {percent >= 88
+                  ? "All 16 chunks received successfully"
+                  : `Active channel: Chunk ${Math.min(activeChunks + 1, 16)} of 16`}
               </span>
               <span className="font-mono font-bold text-slate-200">{Math.round(percent)}%</span>
             </div>

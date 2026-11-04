@@ -100,6 +100,11 @@ export async function GET(req: NextRequest) {
     headers.set("Accept-Ranges", "bytes");
     headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
 
+    // Schedule automatic disk cleanup 3 minutes after download begins (prevents storage buildup)
+    setTimeout(() => {
+      cleanupJob(jobId);
+    }, 180_000);
+
     return new Response(readableStream, {
       status: 200,
       headers,
