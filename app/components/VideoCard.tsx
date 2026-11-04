@@ -221,7 +221,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
   };
 
   return (
-    <section className="relative z-10 mx-auto w-full max-w-4xl px-4 pb-16 sm:px-6 animate-fade-in-up">
+    <section className="relative z-10 mx-auto w-full max-w-4xl px-3 sm:px-6 pb-16 animate-fade-in-up">
       <div className="glass-card overflow-hidden">
         {/* ── Top: Thumbnail + Meta ──────────────── */}
         <div className="flex flex-col sm:flex-row">
@@ -240,42 +240,42 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
           </div>
 
           {/* Meta */}
-          <div className="flex flex-1 flex-col justify-center gap-4 p-5 sm:p-6">
+          <div className="flex flex-1 flex-col justify-center gap-3 p-4 sm:p-6 min-w-0">
             <div>
-              <h2 className="text-lg font-bold leading-snug text-white line-clamp-2 sm:text-xl">
+              <h2 className="text-base sm:text-xl font-bold leading-snug text-white line-clamp-2 break-words">
                 {info.title}
               </h2>
-              <p className="mt-1.5 flex items-center gap-1.5 text-sm text-slate-400">
-                <User className="h-3.5 w-3.5" />
-                {info.author}
+              <p className="mt-1.5 flex items-center gap-1.5 text-xs sm:text-sm text-slate-400">
+                <User className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{info.author}</span>
               </p>
             </div>
           </div>
         </div>
 
         {/* ── Download Control Panel ───────────────────── */}
-        <div className="border-t border-white/5 px-5 py-5 sm:px-6">
+        <div className="border-t border-white/5 px-3.5 py-4 sm:px-6 sm:py-5">
           {/* Download Speed Mode Toggle Switch */}
-          <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-xl border border-white/10 bg-gradient-to-r from-slate-900/90 via-slate-800/60 to-slate-900/90 p-4 shadow-lg">
-            <div className="flex items-center gap-3">
+          <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 rounded-xl border border-white/10 bg-gradient-to-r from-slate-900/90 via-slate-800/60 to-slate-900/90 p-3 sm:p-4 shadow-lg w-full">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
               <div
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all duration-300 ${
+                className={`flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl border transition-all duration-300 ${
                   turboMode
                     ? "border-amber-400/40 bg-amber-500/15 text-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.25)]"
                     : "border-slate-700 bg-slate-800/80 text-slate-400"
                 }`}
               >
                 <Zap
-                  className={`h-6 w-6 transition-all ${
+                  className={`h-5 w-5 sm:h-6 sm:w-6 transition-all ${
                     turboMode ? "animate-pulse fill-amber-400" : ""
                   }`}
                 />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-white">Download Engine Mode</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                  <span className="text-xs sm:text-sm font-bold text-white whitespace-nowrap">Download Engine Mode</span>
                   <span
-                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider transition-all ${
+                    className={`rounded-full px-2 py-0.5 text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${
                       turboMode
                         ? "bg-gradient-to-r from-amber-500/30 to-yellow-500/30 text-amber-300 border border-amber-500/40 shadow-sm"
                         : "bg-slate-700/60 text-slate-400 border border-slate-600/30"
@@ -284,7 +284,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
                     {turboMode ? "⚡ Turbo Multi-Stream" : "Standard Mode"}
                   </span>
                 </div>
-                <p className="mt-0.5 text-xs text-slate-400">
+                <p className="mt-0.5 text-[11px] sm:text-xs text-slate-400 line-clamp-1">
                   {turboMode
                     ? "High-speed 16-channel multi-stream buffer enabled"
                     : "Standard single-stream download"}
@@ -293,7 +293,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
             </div>
 
             {/* Toggle Switch */}
-            <div className="flex items-center gap-3 self-end sm:self-center bg-black/30 px-3.5 py-2 rounded-xl border border-white/5">
+            <div className="flex items-center gap-2.5 sm:gap-3 w-full sm:w-auto justify-between sm:justify-start bg-black/40 px-3 py-1.5 rounded-xl border border-white/5 shrink-0">
               <span
                 onClick={() => setTurboMode(false)}
                 className={`text-xs cursor-pointer select-none transition-colors ${
@@ -307,7 +307,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
                 role="switch"
                 aria-checked={turboMode}
                 onClick={() => setTurboMode(!turboMode)}
-                className={`relative inline-flex h-6 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
+                className={`relative inline-flex h-5 w-11 sm:h-6 sm:w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
                   turboMode
                     ? "bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.4)]"
                     : "bg-slate-700"
@@ -315,7 +315,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
               >
                 <span
                   aria-hidden="true"
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-300 ease-in-out ${
+                  className={`pointer-events-none inline-block h-4 w-4 sm:h-5 sm:w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-300 ease-in-out ${
                     turboMode ? "translate-x-6" : "translate-x-0"
                   }`}
                 />
@@ -334,20 +334,20 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
           </div>
 
           {/* Clip / Segment Cutter */}
-          <div className="mb-6 rounded-xl border border-white/10 bg-slate-900/60 p-4 transition-all">
+          <div className="mb-6 rounded-xl border border-white/10 bg-slate-900/60 p-3 sm:p-4 transition-all">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
                   <Scissors className="h-4 w-4" />
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-white">Smart Clip Cutter</span>
-                    <span className="rounded-full bg-amber-500/20 px-2 py-0.2 text-[10px] font-black text-amber-300 uppercase">
+                    <span className="text-xs sm:text-sm font-bold text-white">Smart Clip Cutter</span>
+                    <span className="rounded-full bg-amber-500/20 px-1.5 py-0.2 text-[9px] font-black text-amber-300 uppercase">
                       New
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-[11px] sm:text-xs text-slate-400 line-clamp-1">
                     Download only your favorite part (e.g. 00:00:30 to 00:01:45)
                   </p>
                 </div>
@@ -356,7 +356,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
               <button
                 type="button"
                 onClick={() => setClipEnabled(!clipEnabled)}
-                className={`self-start sm:self-center px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                className={`self-start sm:self-center px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all shrink-0 ${
                   clipEnabled
                     ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
                     : "bg-white/5 text-slate-400 border-white/10 hover:text-white"
@@ -367,7 +367,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
             </div>
 
             {clipEnabled && (
-              <div className="mt-3.5 pt-3.5 border-t border-white/5 flex flex-wrap items-center gap-4 animate-fade-in">
+              <div className="mt-3.5 pt-3.5 border-t border-white/5 flex flex-wrap items-center gap-3 animate-fade-in">
                 <div className="flex items-center gap-2">
                   <label className="text-xs font-medium text-slate-400">Start Time:</label>
                   <input
@@ -400,16 +400,16 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
              ══════════════════════════════════════════════════════════════ */}
           {directFormats.length > 0 && (
             <div className="mb-7">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-emerald-400">
-                  <Film className="h-4 w-4 text-emerald-400" />
-                  Instant Fast Download (Ready with Audio) ⚡
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-3">
+                <h3 className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold uppercase tracking-wider text-emerald-400 min-w-0">
+                  <Film className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <span className="truncate">Instant Fast Download (Ready with Audio) ⚡</span>
                 </h3>
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                <span className="self-start sm:self-auto text-[9px] sm:text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap shrink-0">
                   Direct CDN · 20-50 MB/s
                 </span>
               </div>
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {directFormats.map((f, i) => (
                   <FormatRow
                     key={`direct-${i}`}
@@ -430,16 +430,16 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
              ══════════════════════════════════════════════════════════════ */}
           {cinemaFormats.length > 0 && (
             <div className="mb-7">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-blue-400">
-                  <Film className="h-4 w-4 text-blue-400" />
-                  Cinema & Ultra HD (1080p to 8K Auto-Merged) 🎬
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-3">
+                <h3 className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold uppercase tracking-wider text-blue-400 min-w-0">
+                  <Film className="h-4 w-4 text-blue-400 shrink-0" />
+                  <span className="truncate">Cinema & Ultra HD (1080p to 8K Auto-Merged) 🎬</span>
                 </h3>
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                <span className="self-start sm:self-auto text-[9px] sm:text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 whitespace-nowrap shrink-0">
                   Full Audio Sync
                 </span>
               </div>
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {visibleCinema.map((f, i) => (
                   <FormatRow
                     key={`cinema-${i}`}
@@ -480,16 +480,16 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
              ══════════════════════════════════════════════════════════════ */}
           {standardFormats.length > 0 && (
             <div className="mb-7">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-indigo-400">
-                  <Film className="h-4 w-4 text-indigo-400" />
-                  Standard & Mobile (720p – 144p Auto-Merged) 📱
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-3">
+                <h3 className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold uppercase tracking-wider text-indigo-400 min-w-0">
+                  <Film className="h-4 w-4 text-indigo-400 shrink-0" />
+                  <span className="truncate">Standard & Mobile (720p – 144p Auto-Merged) 📱</span>
                 </h3>
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                <span className="self-start sm:self-auto text-[9px] sm:text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap shrink-0">
                   Full Audio
                 </span>
               </div>
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {standardFormats.map((f, i) => (
                   <FormatRow
                     key={`std-${i}`}
@@ -523,25 +523,25 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
                     Converts audio directly to MP3 with embedded Title, Artist, and Album metadata
                   </span>
 
-                  {/* Bitrate Selector Pills */}
-                  <div className="mt-3 flex items-center gap-2">
+                  {/* Bitrate Selector Pills - fully wrapping for small screens */}
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5 sm:gap-2">
                     <span className="text-xs text-slate-400 font-semibold mr-1">Quality:</span>
                     {(["320k", "192k", "128k"] as const).map((b) => (
                       <button
                         key={b}
                         type="button"
                         onClick={() => setSelectedBitrate(b)}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                        className={`px-2.5 py-1 sm:px-3 sm:py-1.5 text-xs font-bold rounded-lg transition-all ${
                           selectedBitrate === b
                             ? "bg-purple-600 text-white shadow-[0_0_12px_rgba(168,85,247,0.45)] border border-purple-400/50"
                             : "bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 border border-white/5"
                         }`}
                       >
                         {b === "320k"
-                          ? "320 kbps (Studio HD)"
+                          ? "320 kbps (Studio)"
                           : b === "192k"
-                          ? "192 kbps (Standard)"
-                          : "128 kbps (Light)"}
+                          ? "192 kbps"
+                          : "128 kbps"}
                       </button>
                     ))}
                   </div>
@@ -550,7 +550,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
                 <button
                   onClick={() => handleStartConvert(selectedBitrate)}
                   disabled={startingJob}
-                  className={`flex shrink-0 items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:scale-[1.02] disabled:opacity-50 ${
+                  className={`w-full lg:w-auto flex shrink-0 items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-lg hover:scale-[1.02] disabled:opacity-50 ${
                     turboMode
                       ? "bg-gradient-to-r from-purple-500 via-indigo-500 to-amber-500 text-white shadow-purple-500/30"
                       : "bg-purple-600 hover:bg-purple-500 text-white"
@@ -558,12 +558,12 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
                 >
                   {turboMode ? (
                     <>
-                      <Zap className="h-4 w-4 text-amber-300 fill-amber-300" />
+                      <Zap className="h-4 w-4 text-amber-300 fill-amber-300 shrink-0" />
                       <span>Download MP3 (Turbo ⚡)</span>
                     </>
                   ) : (
                     <>
-                      <Download className="h-4 w-4" />
+                      <Download className="h-4 w-4 shrink-0" />
                       <span>Download MP3</span>
                     </>
                   )}
@@ -575,20 +575,20 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
           {/* ══════════════════════════════════════════════════════════════
               SECTION 4: Subtitles & Lyrics Extractor
              ══════════════════════════════════════════════════════════════ */}
-          <div className="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+          <div className="rounded-xl border border-white/10 bg-slate-900/60 p-3.5 sm:p-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-              <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-400">
-                <FileText className="h-4 w-4 text-cyan-400" />
-                Subtitles & Lyrics Extractor
+              <h3 className="flex items-center gap-2 text-xs sm:text-sm font-semibold uppercase tracking-wider text-slate-400 min-w-0">
+                <FileText className="h-4 w-4 text-cyan-400 shrink-0" />
+                <span className="truncate">Subtitles & Lyrics Extractor</span>
               </h3>
 
               {/* Language Selector Dropdown */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 self-start sm:self-auto">
                 <label className="text-xs text-slate-400 font-medium">Language:</label>
                 <select
                   value={selectedSubtitleLang}
                   onChange={(e) => setSelectedSubtitleLang(e.target.value)}
-                  className="rounded-lg bg-black/60 border border-white/10 px-2.5 py-1 text-xs text-white focus:outline-none focus:border-cyan-400"
+                  className="rounded-lg bg-black/60 border border-white/10 px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-400"
                 >
                   {subtitlesList.map((sub, i) => (
                     <option key={`sub-${i}`} value={sub.lang}>
@@ -599,7 +599,7 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
               <a
                 href={`/api/subtitles?url=${encodeURIComponent(
                   info.videoUrl
@@ -608,13 +608,13 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
                 )}&lang=${selectedSubtitleLang}&format=txt`}
                 className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] p-3 hover:border-cyan-500/30 hover:bg-cyan-500/5 transition-all group"
               >
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs sm:text-sm font-bold text-white group-hover:text-cyan-300 transition-colors truncate">
                     Clean Lyrics
                   </span>
-                  <span className="text-xs text-slate-400">Plain Text (.TXT)</span>
+                  <span className="text-[11px] sm:text-xs text-slate-400">Plain Text (.TXT)</span>
                 </div>
-                <Download className="h-4 w-4 text-cyan-400 shrink-0" />
+                <Download className="h-4 w-4 text-cyan-400 shrink-0 ml-2" />
               </a>
 
               <a
@@ -625,13 +625,13 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
                 )}&lang=${selectedSubtitleLang}&format=srt`}
                 className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] p-3 hover:border-cyan-500/30 hover:bg-cyan-500/5 transition-all group"
               >
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs sm:text-sm font-bold text-white group-hover:text-cyan-300 transition-colors truncate">
                     Time-synced (.SRT)
                   </span>
-                  <span className="text-xs text-slate-400">Standard Players</span>
+                  <span className="text-[11px] sm:text-xs text-slate-400">Standard Players</span>
                 </div>
-                <Download className="h-4 w-4 text-cyan-400 shrink-0" />
+                <Download className="h-4 w-4 text-cyan-400 shrink-0 ml-2" />
               </a>
 
               <a
@@ -642,13 +642,13 @@ export default function VideoCard({ info }: { info: VideoInfo }) {
                 )}&lang=${selectedSubtitleLang}&format=vtt`}
                 className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] p-3 hover:border-cyan-500/30 hover:bg-cyan-500/5 transition-all group"
               >
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs sm:text-sm font-bold text-white group-hover:text-cyan-300 transition-colors truncate">
                     Web Captions (.VTT)
                   </span>
-                  <span className="text-xs text-slate-400">HTML5 / Web</span>
+                  <span className="text-[11px] sm:text-xs text-slate-400">HTML5 / Web</span>
                 </div>
-                <Download className="h-4 w-4 text-cyan-400 shrink-0" />
+                <Download className="h-4 w-4 text-cyan-400 shrink-0 ml-2" />
               </a>
             </div>
           </div>
@@ -701,17 +701,17 @@ function FormatRow({
       : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.35)]";
 
   return (
-    <div className="group flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] px-3.5 py-3 transition-colors hover:border-white/10 hover:bg-white/[0.04]">
+    <div className="group flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2.5 sm:px-3.5 sm:py-3 transition-colors hover:border-white/10 hover:bg-white/[0.04] gap-2">
       {/* Info */}
-      <div className="flex flex-col">
-        <span className="flex items-center gap-1.5 text-sm font-bold text-white">
+      <div className="flex flex-col min-w-0 flex-1">
+        <span className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-white truncate">
           {label}
         </span>
-        {size && <span className="text-xs text-slate-400">{size}</span>}
+        {size && <span className="text-[11px] sm:text-xs text-slate-400 truncate">{size}</span>}
       </div>
 
       {/* Download Action */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         {f.requiresMerge ? (
           <button
             onClick={() =>
@@ -729,17 +729,19 @@ function FormatRow({
                 ? "High-Speed Turbo Audio Merge"
                 : "Standard Audio Merge"
             }
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${mergeButtonGradient} disabled:opacity-50`}
+            className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${mergeButtonGradient} disabled:opacity-50 whitespace-nowrap`}
           >
             {turboMode ? (
               <>
-                <Zap className="h-3.5 w-3.5 text-amber-300 fill-amber-300" />
-                <span>Merge & Turbo ⚡</span>
+                <Zap className="h-3.5 w-3.5 text-amber-300 fill-amber-300 shrink-0" />
+                <span className="hidden xs:inline">Merge & Turbo ⚡</span>
+                <span className="xs:hidden">Turbo ⚡</span>
               </>
             ) : (
               <>
-                <Download className="h-3.5 w-3.5" />
-                <span>Merge & Download</span>
+                <Download className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden xs:inline">Merge & Download</span>
+                <span className="xs:hidden">Merge</span>
               </>
             )}
           </button>
@@ -747,10 +749,11 @@ function FormatRow({
           <a
             href={buildDirectDownloadUrl(f, title, f.container)}
             title="Instant Fast Download at full ISP speed"
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-[0_0_15px_rgba(16,185,129,0.35)]"
+            className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-[0_0_15px_rgba(16,185,129,0.35)] whitespace-nowrap"
           >
-            <Download className="h-3.5 w-3.5" />
-            <span>Fast 1-Click ⚡</span>
+            <Download className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden xs:inline">Fast 1-Click ⚡</span>
+            <span className="xs:hidden">Fast ⚡</span>
           </a>
         )}
       </div>

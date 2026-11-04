@@ -105,38 +105,38 @@ export default function DownloadProgressModal({
   const activeSegmentIndex = Math.min(Math.floor((percent / 100) * numSegments), numSegments - 1);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in">
-      <div className="relative w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900/95 p-6 shadow-2xl backdrop-blur-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-fade-in overflow-y-auto">
+      <div className="relative w-full max-w-lg rounded-2xl sm:rounded-3xl border border-white/10 bg-slate-900/95 p-4 sm:p-6 shadow-2xl backdrop-blur-2xl my-auto">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 rounded-xl p-2 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+          className="absolute right-3 top-3 sm:right-4 sm:top-4 rounded-xl p-1.5 sm:p-2 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
         >
-          <X className="h-5 w-5" />
+          <X className="h-4 w-4 sm:h-5 sm:w-5" />
         </button>
 
         {/* Media Preview Header */}
-        <div className="flex items-center gap-4 mb-5 pr-8">
+        <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-5 pr-7 sm:pr-8">
           {thumbnail && (
-            <div className="relative h-16 w-24 shrink-0 overflow-hidden rounded-xl bg-slate-800 border border-white/10">
+            <div className="relative h-14 w-20 sm:h-16 sm:w-24 shrink-0 overflow-hidden rounded-lg sm:rounded-xl bg-slate-800 border border-white/10">
               <img src={thumbnail} alt={title} className="h-full w-full object-cover" />
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-bold text-white line-clamp-1">{title || "Downloading Media"}</h3>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <h3 className="text-xs sm:text-sm font-bold text-white line-clamp-1">{title || "Downloading Media"}</h3>
+            <div className="mt-1 flex flex-wrap items-center gap-1 sm:gap-1.5">
               {isTurbo ? (
-                <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-300 border border-amber-500/30">
+                <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[10px] sm:text-xs font-semibold text-amber-300 border border-amber-500/30">
                   <Zap className="h-3 w-3 text-amber-400 fill-amber-400" />
                   ⚡ Turbo Multi-Stream (16X)
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-300 border border-slate-700">
+                <span className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-1.5 py-0.5 text-[10px] sm:text-xs font-semibold text-slate-300 border border-slate-700">
                   Standard Stream
                 </span>
               )}
               {qualityLabel && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-indigo-500/20 px-2 py-0.5 text-xs font-semibold text-indigo-300 border border-indigo-500/30">
+                <span className="inline-flex items-center gap-1 rounded-md bg-indigo-500/20 px-1.5 py-0.5 text-[10px] sm:text-xs font-semibold text-indigo-300 border border-indigo-500/30">
                   <Sparkles className="h-3 w-3" />
                   {qualityLabel}
                 </span>
@@ -146,9 +146,9 @@ export default function DownloadProgressModal({
         </div>
 
         {/* 4-Step Flow Indicator */}
-        <div className="mb-5 grid grid-cols-4 gap-1.5 text-center text-[10px] font-bold">
+        <div className="mb-4 sm:mb-5 grid grid-cols-4 gap-1 sm:gap-1.5 text-center text-[9px] sm:text-[10px] font-bold">
           <div
-            className={`py-1.5 rounded-xl border transition-all ${
+            className={`py-1.5 rounded-lg sm:rounded-xl border transition-all ${
               percent >= 5
                 ? "border-indigo-500/50 bg-indigo-500/20 text-indigo-300"
                 : "border-white/5 bg-white/[0.02] text-slate-500"
@@ -157,7 +157,7 @@ export default function DownloadProgressModal({
             1. Connect
           </div>
           <div
-            className={`py-1.5 rounded-xl border transition-all ${
+            className={`py-1.5 rounded-lg sm:rounded-xl border transition-all ${
               status === "downloading" || (percent >= 15 && percent < 85)
                 ? "border-amber-500/60 bg-amber-500/25 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)] animate-pulse"
                 : percent >= 85
@@ -165,10 +165,11 @@ export default function DownloadProgressModal({
                 : "border-white/5 bg-white/[0.02] text-slate-500"
             }`}
           >
-            2. Stream Buffer
+            <span className="hidden sm:inline">2. Stream Buffer</span>
+            <span className="sm:hidden">2. Buffer</span>
           </div>
           <div
-            className={`py-1.5 rounded-xl border transition-all ${
+            className={`py-1.5 rounded-lg sm:rounded-xl border transition-all ${
               status === "merging" || (percent >= 85 && percent < 100)
                 ? "border-purple-500/60 bg-purple-500/25 text-purple-300 shadow-[0_0_12px_rgba(168,85,247,0.25)] animate-pulse"
                 : percent >= 100
@@ -176,10 +177,11 @@ export default function DownloadProgressModal({
                 : "border-white/5 bg-white/[0.02] text-slate-500"
             }`}
           >
-            3. {isMp3 ? "Studio Encode" : "Audio-Video Sync"}
+            <span className="hidden sm:inline">3. {isMp3 ? "Studio Encode" : "Audio-Video Sync"}</span>
+            <span className="sm:hidden">3. {isMp3 ? "Encode" : "Sync"}</span>
           </div>
           <div
-            className={`py-1.5 rounded-xl border transition-all ${
+            className={`py-1.5 rounded-lg sm:rounded-xl border transition-all ${
               status === "completed" || percent >= 100
                 ? "border-emerald-500/60 bg-emerald-500/30 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.3)] font-black"
                 : "border-white/5 bg-white/[0.02] text-slate-500"

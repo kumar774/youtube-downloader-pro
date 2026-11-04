@@ -17,14 +17,18 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
-      <body className="relative min-h-full flex flex-col overflow-x-hidden">
-        {/* Ambient background orbs */}
-        <div className="bg-orb w-[500px] h-[500px] bg-indigo-600 top-[-100px] left-[-100px]" />
-        <div className="bg-orb w-[400px] h-[400px] bg-purple-600 bottom-[20%] right-[-80px]" />
-        <div className="bg-orb w-[300px] h-[300px] bg-emerald-600 top-[60%] left-[30%]" />
+    <html lang="en" className={`${inter.variable} h-full antialiased overflow-x-hidden`}>
+      <body className="relative min-h-full flex flex-col w-full max-w-full overflow-x-hidden">
+        {/* Ambient background orbs contained safely */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+          <div className="bg-orb w-[500px] h-[500px] bg-indigo-600 top-[-100px] left-[-100px]" />
+          <div className="bg-orb w-[400px] h-[400px] bg-purple-600 bottom-[20%] right-[-80px]" />
+          <div className="bg-orb w-[300px] h-[300px] bg-emerald-600 top-[60%] left-[30%]" />
+        </div>
 
-        {children}
+        <div className="relative z-10 flex min-h-full flex-col w-full max-w-full">
+          {children}
+        </div>
       </body>
     </html>
   );

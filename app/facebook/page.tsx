@@ -287,32 +287,32 @@ export default function FacebookPage() {
                       <button
                         onClick={handleStartVideoDownload}
                         disabled={startingJob}
-                        className="flex-1 flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 p-4 font-bold text-white shadow-lg shadow-blue-500/25 hover:scale-[1.01] transition-all disabled:opacity-50"
+                        className="flex-1 flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 p-3.5 sm:p-4 font-bold text-white shadow-lg shadow-blue-500/25 hover:scale-[1.01] transition-all disabled:opacity-50 min-w-0"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 shrink-0">
-                            <Film className="h-5 w-5 text-white" />
+                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                          <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-white/20 shrink-0">
+                            <Film className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                           </div>
-                          <div className="text-left">
-                            <div className="text-sm font-extrabold flex items-center gap-2">
+                          <div className="text-left min-w-0 flex-1">
+                            <div className="text-xs sm:text-sm font-extrabold flex flex-wrap items-center gap-1.5 sm:gap-2">
                               <span>Highest Quality Video</span>
-                              <span className="rounded bg-white/20 px-1.5 py-0.2 text-[10px] uppercase">
+                              <span className="rounded bg-white/20 px-1.5 py-0.2 text-[9px] sm:text-[10px] uppercase">
                                 {result.bestVideo.qualityLabel}
                               </span>
                             </div>
-                            <span className="text-xs text-blue-200">
+                            <span className="text-[11px] sm:text-xs text-blue-200 block truncate">
                               Lossless high-definition video & audio
                             </span>
                           </div>
                         </div>
-                        <Download className="h-5 w-5 shrink-0 ml-2" />
+                        <Download className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 ml-2" />
                       </button>
 
                       {result.bestVideo.isDirectCdn && (
                         <a
                           href={`/api/download?url=${encodeURIComponent(result.bestVideo.url)}&title=${encodeURIComponent(result.title)}`}
                           download
-                          className="flex sm:flex-col items-center justify-center gap-1.5 px-4 py-3 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 transition-all font-bold text-xs shrink-0 text-center"
+                          className="flex sm:flex-col items-center justify-center gap-1.5 px-4 py-2.5 sm:py-3 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 transition-all font-bold text-xs shrink-0 text-center"
                           title="Instant 1-Click Direct Download"
                         >
                           <Zap className="h-4 w-4 text-emerald-400" />
@@ -325,25 +325,25 @@ export default function FacebookPage() {
                     <button
                       onClick={handleStartAudioDownload}
                       disabled={startingJob}
-                      className="flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-950/40 p-4 font-bold text-white hover:bg-purple-900/50 transition-all disabled:opacity-50"
+                      className="flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-950/40 p-3.5 sm:p-4 font-bold text-white hover:bg-purple-900/50 transition-all disabled:opacity-50 min-w-0"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/20 text-purple-300">
-                          <Music className="h-5 w-5" />
+                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                        <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-purple-500/20 text-purple-300 shrink-0">
+                          <Music className="h-4 w-4 sm:h-5 sm:w-5" />
                         </div>
-                        <div className="text-left">
-                          <div className="text-sm font-extrabold flex items-center gap-2">
+                        <div className="text-left min-w-0 flex-1">
+                          <div className="text-xs sm:text-sm font-extrabold flex flex-wrap items-center gap-1.5 sm:gap-2">
                             <span>Audio Track Only</span>
-                            <span className="rounded bg-purple-500/30 text-purple-300 px-1.5 py-0.2 text-[10px] uppercase font-bold">
+                            <span className="rounded bg-purple-500/30 text-purple-300 px-1.5 py-0.2 text-[9px] sm:text-[10px] uppercase font-bold">
                               MP3 320 kbps
                             </span>
                           </div>
-                          <span className="text-xs text-slate-400">
+                          <span className="text-[11px] sm:text-xs text-slate-400 block truncate">
                             Studio sound with embedded ID3 metadata
                           </span>
                         </div>
                       </div>
-                      <Download className="h-5 w-5 text-purple-400" />
+                      <Download className="h-4 w-4 sm:h-5 sm:w-5 text-purple-400 shrink-0 ml-2" />
                     </button>
                   </div>
                 </div>
