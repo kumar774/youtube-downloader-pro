@@ -32,6 +32,7 @@ interface SocialMediaResult {
     contentLength: string;
     requiresMerge?: boolean;
     audioStreamUrl?: string;
+    isDirectCdn?: boolean;
   };
   bestAudio: {
     url: string;
@@ -282,29 +283,43 @@ export default function FacebookPage() {
                   {/* 2 Clear Options */}
                   <div className="mt-6 flex flex-col gap-3">
                     {/* Option 1: Highest Video MP4 */}
-                    <button
-                      onClick={handleStartVideoDownload}
-                      disabled={startingJob}
-                      className="flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 p-4 font-bold text-white shadow-lg shadow-blue-500/25 hover:scale-[1.01] transition-all disabled:opacity-50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
-                          <Film className="h-5 w-5 text-white" />
-                        </div>
-                        <div className="text-left">
-                          <div className="text-sm font-extrabold flex items-center gap-2">
-                            <span>Highest Quality Video (Full HD)</span>
-                            <span className="rounded bg-white/20 px-1.5 py-0.2 text-[10px] uppercase">
-                              MP4 + Sound
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button
+                        onClick={handleStartVideoDownload}
+                        disabled={startingJob}
+                        className="flex-1 flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 p-4 font-bold text-white shadow-lg shadow-blue-500/25 hover:scale-[1.01] transition-all disabled:opacity-50"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 shrink-0">
+                            <Film className="h-5 w-5 text-white" />
+                          </div>
+                          <div className="text-left">
+                            <div className="text-sm font-extrabold flex items-center gap-2">
+                              <span>Highest Quality Video</span>
+                              <span className="rounded bg-white/20 px-1.5 py-0.2 text-[10px] uppercase">
+                                {result.bestVideo.qualityLabel}
+                              </span>
+                            </div>
+                            <span className="text-xs text-blue-200">
+                              Lossless high-definition video & audio
                             </span>
                           </div>
-                          <span className="text-xs text-blue-200">
-                            Lossless auto-merged video & audio
-                          </span>
                         </div>
-                      </div>
-                      <Download className="h-5 w-5" />
-                    </button>
+                        <Download className="h-5 w-5 shrink-0 ml-2" />
+                      </button>
+
+                      {result.bestVideo.isDirectCdn && (
+                        <a
+                          href={`/api/download?url=${encodeURIComponent(result.bestVideo.url)}&title=${encodeURIComponent(result.title)}`}
+                          download
+                          className="flex sm:flex-col items-center justify-center gap-1.5 px-4 py-3 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 transition-all font-bold text-xs shrink-0 text-center"
+                          title="Instant 1-Click Direct Download"
+                        >
+                          <Zap className="h-4 w-4 text-emerald-400" />
+                          <span>Fast 1-Click</span>
+                        </a>
+                      )}
+                    </div>
 
                     {/* Option 2: Separate Audio MP3 */}
                     <button

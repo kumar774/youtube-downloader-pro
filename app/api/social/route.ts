@@ -19,6 +19,50 @@ function detectPlatform(url: string): "instagram" | "facebook" | "unknown" {
   return "unknown";
 }
 
+/**
+ * Calculates a comprehensive quality score for social video formats
+ * Ensures HD (1080p, 720p, 4K) formats with highest bitrates are prioritized over SD (360p, 480p).
+ */
+function formatQualityScore(f: any): number {
+  let score = 0;
+  const fid = String(f.format_id || "").toLowerCase();
+  const formatNote = String(f.format_note || "").toLowerCase();
+  const formatStr = String(f.format || "").toLowerCase();
+
+  // 1. Explicit HD / SD tags from Facebook & Instagram
+  if (fid === "hd" || formatNote.includes("hd") || formatStr.includes("hd")) score += 2000000;
+  if (fid === "sd" || formatNote.includes("sd") || formatStr.includes("sd")) score += 100000;
+
+  // 2. Resolution (height, width)
+  const h = typeof f.height === "number" ? f.height : 0;
+  const w = typeof f.width === "number" ? f.width : 0;
+  if (h > 0) {
+    score += h * 2000 + w;
+  }
+
+  // 3. Bitrate / tbr
+  const bitrate = f.tbr || f.vbr || f.bitrate || 0;
+  if (bitrate > 0) {
+    score += Math.round(bitrate * 10);
+  }
+
+  // 4. Filesize
+  const size = f.filesize || f.filesize_approx || 0;
+  if (size > 0) {
+    score += Math.round(size / 1024);
+  }
+
+  // 5. Native quality rating
+  if (typeof f.quality === "number") {
+    score += (f.quality + 10) * 50000;
+  }
+
+  // 6. Prefer MP4 over WebM for social
+  if (f.ext === "mp4") score += 5000;
+
+  return score;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -78,19 +122,44 @@ export async function POST(req: NextRequest) {
     const durationSeconds = rawInfo.duration || 60;
 
     const formats: any[] = rawInfo.formats || [];
-    const videoFormats = formats.filter((f: any) => f.url && f.vcodec !== "none");
-    videoFormats.sort((a: any, b: any) => (b.height || 0) - (a.height || 0));
 
-    const bestWithAudio = videoFormats.find((f: any) => f.acodec !== "none") || videoFormats[0];
-    const audioFormats = formats.filter((f: any) => f.url && f.acodec !== "none");
-    audioFormats.sort((a: any, b: any) => (b.abr || 0) - (a.abr || 0));
-    const bestAudio = audioFormats[0] || bestWithAudio;
+    // Filter valid video candidates
+    const videoCandidates = formats.filter(
+      (f: any) => f.url && f.vcodec !== "none"
+    );
 
-    const videoSize = bestWithAudio?.filesize || bestWithAudio?.filesize_approx || (durationSeconds * 2000000 / 8);
-    const audioSize = bestAudio?.filesize || bestAudio?.filesize_approx || (durationSeconds * 320000 / 8);
+    // If no formats explicitly set vcodec (common in Facebook/Instagram with 'unknown'), keep all with URL
+    const validVideoFormats = videoCandidates.length > 0
+      ? videoCandidates
+      : formats.filter((f: any) => f.url && f.acodec !== f.format_id);
 
-    const videoHeight = bestWithAudio?.height || 1080;
-    const videoQualityLabel = `${videoHeight}p Full HD`;
+    // Sort strictly by highest quality score (HD 1080p > 720p > SD 480p)
+    validVideoFormats.sort((a: any, b: any) => formatQualityScore(b) - formatQualityScore(a));
+
+    // Best video stream (Guaranteed to be HD / 1080p / highest bitrate)
+    const bestVideoFormat = validVideoFormats[0];
+
+    // Find best audio stream
+    const audioFormats = formats.filter((f: any) => f.url && (f.acodec && f.acodec !== "none"));
+    audioFormats.sort((a: any, b: any) => (b.abr || b.tbr || 0) - (a.abr || a.tbr || 0));
+    const bestAudioFormat = audioFormats[0] || bestVideoFormat;
+
+    // Check if best video format is video-only and requires audio merge
+    const isVideoOnly = bestVideoFormat?.acodec === "none";
+    const requiresMerge = isVideoOnly && !!bestAudioFormat && bestAudioFormat !== bestVideoFormat;
+
+    // Determine accurate height and quality label
+    let detectedHeight = bestVideoFormat?.height || 0;
+    if (!detectedHeight) {
+      const fid = String(bestVideoFormat?.format_id || "").toLowerCase();
+      if (fid.includes("hd")) detectedHeight = 1080;
+      else if (fid.includes("sd")) detectedHeight = 480;
+      else detectedHeight = 1080;
+    }
+    const qualityLabel = detectedHeight >= 1080 ? `${detectedHeight}p Full HD` : detectedHeight >= 720 ? `${detectedHeight}p HD` : `${detectedHeight}p`;
+
+    const videoSize = bestVideoFormat?.filesize || bestVideoFormat?.filesize_approx || (durationSeconds * (detectedHeight >= 1080 ? 4500000 : 2000000) / 8);
+    const audioSize = bestAudioFormat?.filesize || bestAudioFormat?.filesize_approx || (durationSeconds * 320000 / 8);
 
     return NextResponse.json({
       platform,
@@ -101,17 +170,17 @@ export async function POST(req: NextRequest) {
       durationSeconds,
       videoUrl: mediaUrl,
       bestVideo: {
-        url: bestWithAudio?.url || mediaUrl,
-        qualityLabel: videoQualityLabel,
-        height: videoHeight,
-        container: bestWithAudio?.ext || "mp4",
+        url: bestVideoFormat?.url || mediaUrl,
+        qualityLabel: qualityLabel,
+        height: detectedHeight,
+        container: bestVideoFormat?.ext || "mp4",
         contentLength: String(Math.round(videoSize)),
-        requiresMerge: bestWithAudio?.acodec === "none",
-        audioStreamUrl: bestAudio?.url,
-        isDirectCdn: bestWithAudio?.acodec !== "none",
+        requiresMerge: requiresMerge,
+        audioStreamUrl: requiresMerge ? bestAudioFormat?.url : undefined,
+        isDirectCdn: !requiresMerge,
       },
       bestAudio: {
-        url: bestAudio?.url || mediaUrl,
+        url: bestAudioFormat?.url || mediaUrl,
         qualityLabel: "MP3 Studio HD (320 kbps)",
         container: "mp3",
         contentLength: String(Math.round(audioSize)),
