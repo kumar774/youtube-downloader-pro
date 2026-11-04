@@ -123,28 +123,39 @@ export async function POST(req: NextRequest) {
 
     const formats: any[] = rawInfo.formats || [];
 
-    // Filter valid video candidates
-    const videoCandidates = formats.filter(
-      (f: any) => f.url && f.vcodec !== "none"
+    // 1. Strictly prioritize formats that have BOTH Video AND Audio (Guarantees sound in downloaded file)
+    const formatsWithAudio = formats.filter(
+      (f: any) => f.url && f.vcodec !== "none" && (f.acodec && f.acodec !== "none")
     );
 
-    // If no formats explicitly set vcodec (common in Facebook/Instagram with 'unknown'), keep all with URL
-    const validVideoFormats = videoCandidates.length > 0
-      ? videoCandidates
-      : formats.filter((f: any) => f.url && f.acodec !== f.format_id);
+    // If formats do not explicitly report acodec (common in Instagram/Facebook progressive mp4s),
+    // filter out DASH video-only streams (which contain zero audio)
+    const candidatesWithAudio = formatsWithAudio.length > 0
+      ? formatsWithAudio
+      : formats.filter((f: any) => {
+          if (!f.url) return false;
+          const fid = String(f.format_id || "").toLowerCase();
+          const isDashVideoOnly = fid.includes("dash_video") || fid.includes("video_only") || f.vcodec === "none";
+          return !isDashVideoOnly && f.acodec !== "none";
+        });
+
+    // Fallback: any video format if no dual-stream found
+    const validVideoFormats = candidatesWithAudio.length > 0
+      ? candidatesWithAudio
+      : formats.filter((f: any) => f.url && f.vcodec !== "none");
 
     // Sort strictly by highest quality score (HD 1080p > 720p > SD 480p)
     validVideoFormats.sort((a: any, b: any) => formatQualityScore(b) - formatQualityScore(a));
 
-    // Best video stream (Guaranteed to be HD / 1080p / highest bitrate)
+    // Best video stream (Guaranteed to be highest quality WITH clear audio)
     const bestVideoFormat = validVideoFormats[0];
 
-    // Find best audio stream
+    // Find best audio stream (for separate MP3 download option)
     const audioFormats = formats.filter((f: any) => f.url && (f.acodec && f.acodec !== "none"));
     audioFormats.sort((a: any, b: any) => (b.abr || b.tbr || 0) - (a.abr || a.tbr || 0));
     const bestAudioFormat = audioFormats[0] || bestVideoFormat;
 
-    // Check if best video format is video-only and requires audio merge
+    // Check if format needs server merge (only if video-only and separate audio exists)
     const isVideoOnly = bestVideoFormat?.acodec === "none";
     const requiresMerge = isVideoOnly && !!bestAudioFormat && bestAudioFormat !== bestVideoFormat;
 

@@ -65,10 +65,12 @@ export async function GET(req: NextRequest) {
     const userAgent = req.headers.get("user-agent") || "";
     const isAppleDevice = /iPhone|iPad|iPod/i.test(userAgent);
 
-    // Fast 302 Redirect Mode for Android / PC (Connects user directly to Google CDN at 20-50 MB/s)
-    // Note: iOS Safari strictly ignores `download` attribute on cross-origin redirects and plays video in player.
-    // Therefore, iOS devices are proxied with proper `Content-Disposition: attachment` so Safari saves file directly.
-    if (mode === "redirect" && directCdnUrl && !isAppleDevice) {
+    // Fast 302 Redirect Mode for YouTube Google CDN
+    // Note: Do NOT 302 redirect for Facebook/Instagram (fbcdn.net / cdninstagram.com) or Apple devices.
+    // Cross-origin redirects without Content-Disposition: attachment cause Chrome and Safari
+    // to open the video in the browser media player instead of saving to disk!
+    const isMetaCdn = directCdnUrl.includes("fbcdn.net") || directCdnUrl.includes("cdninstagram.com");
+    if (mode === "redirect" && directCdnUrl && !isAppleDevice && !isMetaCdn) {
       const redirectUrl = directCdnUrl.includes("googlevideo.com")
         ? `${directCdnUrl}&title=${encodeURIComponent(title)}`
         : directCdnUrl;

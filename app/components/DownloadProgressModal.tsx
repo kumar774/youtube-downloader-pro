@@ -64,7 +64,7 @@ export default function DownloadProgressModal({
         if (data.status === "completed" && !hasTriggeredDownload.current) {
           hasTriggeredDownload.current = true;
           setPercent(100);
-          setStage("Complete! File saving to your device...");
+          setStage("Merge complete! File saving to device...");
 
           // Direct browser download trigger via native anchor
           const downloadUrl = `/api/job/download?jobId=${jobId}`;
@@ -237,14 +237,10 @@ export default function DownloadProgressModal({
             <div className="flex items-center justify-between text-xs mb-2">
               <span className="font-bold text-slate-300 flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-blue-400" />
-                Standard Single Stream Buffer
+                Standard Stream Buffer
               </span>
               <span className="text-white font-mono font-bold text-xs">
-                {downloadedBytes > 0 && totalBytes > 0
-                  ? `${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}`
-                  : totalSizeText
-                  ? `${Math.round(percent)}% of ${totalSizeText}`
-                  : `${Math.round(percent)}%`}
+                {Math.round(percent)}%
               </span>
             </div>
             <div className="relative h-3 w-full rounded-full bg-slate-800 overflow-hidden mb-2">
@@ -254,7 +250,7 @@ export default function DownloadProgressModal({
               />
             </div>
             <div className="flex items-center justify-between text-[11px] text-slate-400">
-              <span>Single HTTP connection stream</span>
+              <span>Streaming and merging tracks</span>
               <span className="font-mono font-bold text-slate-200">{Math.round(percent)}%</span>
             </div>
           </div>
@@ -264,14 +260,10 @@ export default function DownloadProgressModal({
             <div className="flex items-center justify-between text-xs mb-2">
               <span className="font-bold text-amber-300 flex items-center gap-1.5">
                 <Zap className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
-                Turbo 16-Channel Stream Accelerator
+                Multi-Stream Buffer (Turbo 16X)
               </span>
               <span className="text-white font-mono font-bold text-xs">
-                {downloadedBytes > 0 && totalBytes > 0
-                  ? `${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}`
-                  : totalSizeText
-                  ? `${Math.round(percent)}% of ${totalSizeText}`
-                  : `${Math.round(percent)}%`}
+                {Math.round(percent)}%
               </span>
             </div>
 
@@ -299,8 +291,8 @@ export default function DownloadProgressModal({
             <div className="flex items-center justify-between text-[11px] text-slate-400">
               <span className="font-mono">
                 {percent >= 88
-                  ? "All 16 chunks received successfully"
-                  : `Active channel: Chunk ${Math.min(activeChunks + 1, 16)} of 16`}
+                  ? "All 16 stream channels synchronized"
+                  : `Syncing stream channel ${Math.min(activeChunks + 1, 16)} of 16`}
               </span>
               <span className="font-mono font-bold text-slate-200">{Math.round(percent)}%</span>
             </div>
@@ -368,7 +360,7 @@ export default function DownloadProgressModal({
                   <span>
                     {typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent)
                       ? `Save to iPhone ${totalSizeText ? `(${totalSizeText})` : ""}`
-                      : `Save File to Disk ${totalSizeText ? `(${totalSizeText})` : ""}`}
+                      : `Save File to Device ${totalSizeText ? `(${totalSizeText})` : ""}`}
                   </span>
                 </a>
                 <button

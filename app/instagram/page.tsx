@@ -184,7 +184,7 @@ export default function InstagramPage() {
                   <div className="mt-6 flex flex-col gap-3">
                     {/* Option 1: Highest Video MP4 */}
                     <a
-                      href={`/api/download?url=${encodeURIComponent(result.bestVideo.url)}&title=${encodeURIComponent(result.title)}&ext=mp4&mode=redirect`}
+                      href={`/api/download?url=${encodeURIComponent(result.bestVideo.url)}&title=${encodeURIComponent(result.title)}&ext=mp4`}
                       download
                       className="flex items-center justify-between rounded-xl bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 p-3.5 sm:p-4 font-bold text-white shadow-lg shadow-pink-500/25 hover:scale-[1.01] active:scale-[0.98] transition-all min-w-0 group"
                     >
@@ -217,7 +217,7 @@ export default function InstagramPage() {
 
                     {/* Option 2: Separate Audio MP3 */}
                     <a
-                      href={`/api/download?url=${encodeURIComponent(result.bestAudio.url)}&title=${encodeURIComponent(result.title)}&ext=mp3&mode=redirect`}
+                      href={`/api/download?url=${encodeURIComponent(result.bestAudio.url)}&title=${encodeURIComponent(result.title)}&ext=mp3`}
                       download
                       className="flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-950/40 p-3.5 sm:p-4 font-bold text-white hover:bg-purple-900/50 hover:border-purple-500/50 transition-all min-w-0 group"
                     >
