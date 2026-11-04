@@ -61,8 +61,14 @@ export async function GET(req: NextRequest) {
       directCdnUrl = matchedFormat.url;
     }
 
-    // Fast 302 Redirect Mode: Connects user directly to Google CDN for 20-50 MB/s download speed with 0 server load
-    if (mode === "redirect" && directCdnUrl) {
+    // Check client device type
+    const userAgent = req.headers.get("user-agent") || "";
+    const isAppleDevice = /iPhone|iPad|iPod/i.test(userAgent);
+
+    // Fast 302 Redirect Mode for Android / PC (Connects user directly to Google CDN at 20-50 MB/s)
+    // Note: iOS Safari strictly ignores `download` attribute on cross-origin redirects and plays video in player.
+    // Therefore, iOS devices are proxied with proper `Content-Disposition: attachment` so Safari saves file directly.
+    if (mode === "redirect" && directCdnUrl && !isAppleDevice) {
       const redirectUrl = directCdnUrl.includes("googlevideo.com")
         ? `${directCdnUrl}&title=${encodeURIComponent(title)}`
         : directCdnUrl;
@@ -90,10 +96,15 @@ export async function GET(req: NextRequest) {
     }
 
     const contentType = ext === "webm" ? "video/webm" : ext === "m4a" ? "audio/mp4" : ext === "mp3" ? "audio/mpeg" : "video/mp4";
+    const rawTitle = title.replace(/[<>:"/\\|?*\x00-\x1F]+/g, "").trim() || "video";
+    const asciiTitle = rawTitle.replace(/[^\x20-\x7E]/g, "").trim() || "video";
+    const encodedTitle = encodeURIComponent(`${rawTitle}.${ext}`);
+
     const headers = new Headers({
-      "Content-Disposition": `attachment; filename="${encodeURIComponent(title)}.${ext}"`,
+      "Content-Disposition": `attachment; filename="${asciiTitle}.${ext}"; filename*=UTF-8''${encodedTitle}`,
       "Content-Type": contentType,
       "Accept-Ranges": "bytes",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
     });
 
     const contentLength = response.headers.get("content-length");

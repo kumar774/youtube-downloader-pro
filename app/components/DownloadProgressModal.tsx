@@ -328,21 +328,32 @@ export default function DownloadProgressModal({
         {/* Action Button Row */}
         <div className="pt-2">
           {status === "completed" ? (
-            <div className="flex flex-col sm:flex-row items-center gap-3">
-              <a
-                href={`/api/job/download?jobId=${jobId}`}
-                download
-                className="w-full flex-1 flex items-center justify-center gap-2 px-6 py-3.5 text-sm font-extrabold rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white shadow-[0_0_25px_rgba(16,185,129,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all"
-              >
-                <Download className="h-4 w-4" />
-                <span>Save File to Disk {totalSizeText ? `(${totalSizeText})` : ""}</span>
-              </a>
-              <button
-                onClick={onClose}
-                className="w-full sm:w-auto px-6 py-3.5 text-sm font-bold rounded-2xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
-              >
-                Close
-              </button>
+            <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <a
+                  href={`/api/job/download?jobId=${jobId}`}
+                  download
+                  className="w-full flex-1 flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-extrabold rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white shadow-[0_0_25px_rgba(16,185,129,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all"
+                >
+                  <Download className="h-4 w-4 shrink-0" />
+                  <span>
+                    {typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent)
+                      ? `Save to iPhone ${totalSizeText ? `(${totalSizeText})` : ""}`
+                      : `Save File to Disk ${totalSizeText ? `(${totalSizeText})` : ""}`}
+                  </span>
+                </a>
+                <button
+                  onClick={onClose}
+                  className="w-full sm:w-auto px-6 py-3.5 text-sm font-bold rounded-2xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors shrink-0"
+                >
+                  Close
+                </button>
+              </div>
+
+              {/* iPhone & Mobile helpful prompt */}
+              <p className="text-[11px] text-center text-slate-400">
+                💡 <span className="text-slate-300 font-semibold">Tip for iPhone / Safari:</span> Tap the button above, then tap <strong className="text-emerald-400 font-bold">&quot;Download&quot;</strong> in the Safari prompt to save directly into your Files / Photos app.
+              </p>
             </div>
           ) : status === "failed" ? (
             <div className="flex w-full justify-end">

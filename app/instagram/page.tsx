@@ -197,7 +197,7 @@ export default function InstagramPage() {
             <span>Instagram Reels, Videos & Stories Downloader</span>
           </div>
 
-          <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-white mb-4">
+          <h1 className="text-2xl sm:text-4xl md:text-5xl font-black tracking-tight text-white mb-3 break-words">
             Download{" "}
             <span className="bg-gradient-to-r from-pink-500 via-purple-500 to-amber-400 bg-clip-text text-transparent">
               Instagram Reels & Audio

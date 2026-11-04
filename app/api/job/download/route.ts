@@ -20,38 +20,85 @@ export async function GET(req: NextRequest) {
   const ext = isAudio ? "mp3" : "mp4";
   const contentType = isAudio ? "audio/mpeg" : "video/mp4";
 
-  const safeTitle = (job.title || "download")
-    .replace(/[^\w\s\-().]/g, "")
-    .replace(/\s+/g, "_")
+  const rawTitle = (job.title || "download")
+    .replace(/[<>:"/\\|?*\x00-\x1F]+/g, "")
     .trim();
+  const asciiTitle = rawTitle.replace(/[^\x20-\x7E]/g, "").trim() || "download";
+  const encodedTitle = encodeURIComponent(`${rawTitle || "download"}.${ext}`);
 
   try {
     const stat = fs.statSync(filePath);
+    const totalSize = stat.size;
+
+    // Check for Range request (essential for iOS Safari / WebKit)
+    const rangeHeader = req.headers.get("range");
+
+    if (rangeHeader) {
+      const parts = rangeHeader.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+
+      if (start >= totalSize || end >= totalSize) {
+        return new Response("Range Not Satisfiable", {
+          status: 416,
+          headers: { "Content-Range": `bytes */${totalSize}` },
+        });
+      }
+
+      const chunkSize = end - start + 1;
+      const fileStream = fs.createReadStream(filePath, { start, end });
+
+      const readableStream = new ReadableStream({
+        start(controller) {
+          fileStream.on("data", (chunk) => controller.enqueue(chunk));
+          fileStream.on("end", () => controller.close());
+          fileStream.on("error", (err) => controller.error(err));
+        },
+        cancel() {
+          fileStream.destroy();
+        },
+      });
+
+      const headers = new Headers();
+      headers.set(
+        "Content-Disposition",
+        `attachment; filename="${asciiTitle}.${ext}"; filename*=UTF-8''${encodedTitle}`
+      );
+      headers.set("Content-Type", contentType);
+      headers.set("Content-Range", `bytes ${start}-${end}/${totalSize}`);
+      headers.set("Accept-Ranges", "bytes");
+      headers.set("Content-Length", chunkSize.toString());
+      headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
+
+      return new Response(readableStream, {
+        status: 206,
+        headers,
+      });
+    }
+
+    // Full file stream
     const fileStream = fs.createReadStream(filePath);
 
     const readableStream = new ReadableStream({
       start(controller) {
         fileStream.on("data", (chunk) => controller.enqueue(chunk));
-        fileStream.on("end", () => {
-          controller.close();
-          // Clean up temp file and job entry after download completes
-          setTimeout(() => cleanupJob(jobId), 1000);
-        });
-        fileStream.on("error", (err) => {
-          controller.error(err);
-          setTimeout(() => cleanupJob(jobId), 1000);
-        });
+        fileStream.on("end", () => controller.close());
+        fileStream.on("error", (err) => controller.error(err));
       },
       cancel() {
         fileStream.destroy();
-        cleanupJob(jobId);
       },
     });
 
     const headers = new Headers();
-    headers.set("Content-Disposition", `attachment; filename="${safeTitle}.${ext}"`);
+    headers.set(
+      "Content-Disposition",
+      `attachment; filename="${asciiTitle}.${ext}"; filename*=UTF-8''${encodedTitle}`
+    );
     headers.set("Content-Type", contentType);
-    headers.set("Content-Length", stat.size.toString());
+    headers.set("Content-Length", totalSize.toString());
+    headers.set("Accept-Ranges", "bytes");
+    headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
 
     return new Response(readableStream, {
       status: 200,
