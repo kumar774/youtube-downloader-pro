@@ -88,7 +88,6 @@ export async function POST(req: NextRequest) {
     const options: any = {
       dumpSingleJson: true,
       noWarnings: true,
-      noCallHome: true,
       noCheckCertificates: true,
       preferFreeFormats: true,
       ignoreConfig: true,
@@ -124,34 +123,30 @@ export async function POST(req: NextRequest) {
     const formats: any[] = rawInfo.formats || [];
 
     // 1. Strictly prioritize formats that have BOTH Video AND Audio (Guarantees sound in downloaded file)
-    const formatsWithAudio = formats.filter(
-      (f: any) => f.url && f.vcodec !== "none" && (f.acodec && f.acodec !== "none")
-    );
-
-    // If formats do not explicitly report acodec (common in Instagram/Facebook progressive mp4s),
-    // filter out DASH video-only streams (which contain zero audio)
-    const candidatesWithAudio = formatsWithAudio.length > 0
-      ? formatsWithAudio
-      : formats.filter((f: any) => {
-          if (!f.url) return false;
-          const fid = String(f.format_id || "").toLowerCase();
-          const isDashVideoOnly = fid.includes("dash_video") || fid.includes("video_only") || f.vcodec === "none";
-          return !isDashVideoOnly && f.acodec !== "none";
-        });
+    // In Facebook & Instagram, progressive MP4s have acodec/vcodec as undefined or valid codec,
+    // whereas silent video-only DASH streams have acodec === 'none'.
+    const validVideoFormats = formats.filter((f: any) => {
+      if (!f.url) return false;
+      if (f.vcodec === "none") return false;
+      if (f.acodec === "none") return false;
+      const fid = String(f.format_id || "").toLowerCase();
+      if (fid.includes("dash_video") || fid.includes("video_only")) return false;
+      return true;
+    });
 
     // Fallback: any video format if no dual-stream found
-    const validVideoFormats = candidatesWithAudio.length > 0
-      ? candidatesWithAudio
+    const finalCandidates = validVideoFormats.length > 0
+      ? validVideoFormats
       : formats.filter((f: any) => f.url && f.vcodec !== "none");
 
     // Sort strictly by highest quality score (HD 1080p > 720p > SD 480p)
-    validVideoFormats.sort((a: any, b: any) => formatQualityScore(b) - formatQualityScore(a));
+    finalCandidates.sort((a: any, b: any) => formatQualityScore(b) - formatQualityScore(a));
 
     // Best video stream (Guaranteed to be highest quality WITH clear audio)
-    const bestVideoFormat = validVideoFormats[0];
+    const bestVideoFormat = finalCandidates[0];
 
     // Find best audio stream (for separate MP3 download option)
-    const audioFormats = formats.filter((f: any) => f.url && (f.acodec && f.acodec !== "none"));
+    const audioFormats = formats.filter((f: any) => f.url && f.vcodec === "none" && f.acodec !== "none");
     audioFormats.sort((a: any, b: any) => (b.abr || b.tbr || 0) - (a.abr || a.tbr || 0));
     const bestAudioFormat = audioFormats[0] || bestVideoFormat;
 
