@@ -13,9 +13,10 @@ function formatDuration(seconds: number): string {
   return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
 }
 
-function detectPlatform(url: string): "instagram" | "facebook" | "unknown" {
+function detectPlatform(url: string): "instagram" | "facebook" | "tiktok" | "unknown" {
   if (/instagram\.com|instagr\.am/i.test(url)) return "instagram";
   if (/facebook\.com|fb\.watch|fb\.com/i.test(url)) return "facebook";
+  if (/tiktok\.com|tikwm\.com/i.test(url)) return "tiktok";
   return "unknown";
 }
 
@@ -75,9 +76,97 @@ export async function POST(req: NextRequest) {
     const platform = detectPlatform(mediaUrl);
     if (platform === "unknown") {
       return NextResponse.json(
-        { error: "Unsupported link. Please enter a valid Instagram or Facebook URL." },
+        { error: "Unsupported link. Please enter a valid Instagram, Facebook, or TikTok URL." },
         { status: 400 }
       );
+    }
+
+    // ── Dedicated High-Speed TikTok Engine (No-Watermark 1080p + MP3) ──
+    if (platform === "tiktok") {
+      try {
+        const tikRes = await fetch("https://www.tikwm.com/api/", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ url: mediaUrl, hd: "1" }),
+        });
+        const tikJson = await tikRes.json();
+        if (tikJson.code === 0 && tikJson.data) {
+          const d = tikJson.data;
+          const title = d.title || "TikTok Video";
+          const thumbnail = d.cover || d.origin_cover || "";
+          const uploader = d.author?.nickname || d.author?.unique_id || "TikTok Creator";
+          const durationSec = d.duration || 30;
+          const duration = formatDuration(durationSec);
+
+          const hdUrl = d.hdplay ? (d.hdplay.startsWith("http") ? d.hdplay : `https://www.tikwm.com${d.hdplay}`) : null;
+          const playUrl = d.play ? (d.play.startsWith("http") ? d.play : `https://www.tikwm.com${d.play}`) : null;
+          const wmUrl = d.wmplay ? (d.wmplay.startsWith("http") ? d.wmplay : `https://www.tikwm.com${d.wmplay}`) : null;
+          const musicUrl = d.music ? (d.music.startsWith("http") ? d.music : `https://www.tikwm.com${d.music}`) : (playUrl || mediaUrl);
+
+          const videoFormats: any[] = [];
+          if (hdUrl) {
+            videoFormats.push({
+              itag: "hd_no_watermark",
+              qualityLabel: "1080p Full HD (No Watermark)",
+              height: 1080,
+              container: "mp4",
+              url: hdUrl,
+              contentLength: String(d.hd_size || d.size || Math.round(durationSec * 3500000 / 8)),
+              requiresMerge: false,
+              isDirectCdn: true,
+              badge: "No Watermark",
+            });
+          }
+
+          if (playUrl) {
+            videoFormats.push({
+              itag: "sd_no_watermark",
+              qualityLabel: "Original Quality (No Watermark)",
+              height: 720,
+              container: "mp4",
+              url: playUrl,
+              contentLength: String(d.size || Math.round(durationSec * 2000000 / 8)),
+              requiresMerge: false,
+              isDirectCdn: true,
+              badge: "Clean MP4",
+            });
+          }
+
+          if (wmUrl) {
+            videoFormats.push({
+              itag: "with_watermark",
+              qualityLabel: "Original (With Watermark)",
+              height: 720,
+              container: "mp4",
+              url: wmUrl,
+              contentLength: String(d.wm_size || d.size || Math.round(durationSec * 1800000 / 8)),
+              requiresMerge: false,
+              isDirectCdn: true,
+              badge: "Watermarked",
+            });
+          }
+
+          return NextResponse.json({
+            platform: "tiktok",
+            title,
+            thumbnail,
+            uploader,
+            duration,
+            durationSeconds: durationSec,
+            videoUrl: mediaUrl,
+            videoFormats,
+            bestVideo: videoFormats[0],
+            bestAudio: {
+              url: musicUrl,
+              qualityLabel: d.music_info?.title ? `MP3 · ${d.music_info.title}` : "MP3 Audio Track (Original Sound)",
+              container: "mp3",
+              contentLength: String(Math.round(durationSec * 320000 / 8)),
+            },
+          });
+        }
+      } catch (tikErr: any) {
+        console.warn("[/api/social] TikWM error, falling back to yt-dlp:", tikErr?.message);
+      }
     }
 
     // Prepare cookies if configured

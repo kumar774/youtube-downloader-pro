@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Zap, Youtube, Instagram, Facebook } from "lucide-react";
+import { Zap, Youtube, Instagram, Facebook, Music } from "lucide-react";
 
 export default function Header() {
   const pathname = usePathname();
@@ -38,6 +38,16 @@ export default function Header() {
       activeColor: "bg-blue-600/25 text-blue-400 border-blue-500/40 shadow-[0_0_12px_rgba(37,99,235,0.25)]",
       hoverColor: "hover:text-blue-400 hover:bg-blue-500/10",
       active: pathname === "/facebook",
+    },
+    {
+      name: "TikTok",
+      shortName: "TT",
+      mediumName: "TikTok",
+      href: "/tiktok",
+      icon: Music,
+      activeColor: "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.25)]",
+      hoverColor: "hover:text-cyan-400 hover:bg-cyan-500/10",
+      active: pathname === "/tiktok",
     },
   ];
 
