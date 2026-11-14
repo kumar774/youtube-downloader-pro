@@ -83,69 +83,91 @@ export async function POST(req: NextRequest) {
 
     // ── Dedicated High-Speed TikTok Engine (No-Watermark 1080p + MP3) ──
     if (platform === "tiktok") {
-      try {
-        const tikRes = await fetch("https://www.tikwm.com/api/", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ url: mediaUrl, hd: "1" }),
-        });
-        const tikJson = await tikRes.json();
-        if (tikJson.code === 0 && tikJson.data) {
-          const d = tikJson.data;
-          const title = d.title || "TikTok Video";
-          const thumbnail = d.cover || d.origin_cover || "";
-          const uploader = d.author?.nickname || d.author?.unique_id || "TikTok Creator";
-          const durationSec = d.duration || 30;
-          const duration = formatDuration(durationSec);
+      const tikDomains = ["https://www.tikwm.com/api/", "https://tikwm.com/api/"];
+      let tikData: any = null;
 
-          const hdUrl = d.hdplay ? (d.hdplay.startsWith("http") ? d.hdplay : `https://www.tikwm.com${d.hdplay}`) : null;
-          const playUrl = d.play ? (d.play.startsWith("http") ? d.play : `https://www.tikwm.com${d.play}`) : null;
-          const wmUrl = d.wmplay ? (d.wmplay.startsWith("http") ? d.wmplay : `https://www.tikwm.com${d.wmplay}`) : null;
-          const musicUrl = d.music ? (d.music.startsWith("http") ? d.music : `https://www.tikwm.com${d.music}`) : (playUrl || mediaUrl);
+      for (const endpoint of tikDomains) {
+        try {
+          const tikRes = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+              "Accept": "application/json",
+            },
+            body: new URLSearchParams({ url: mediaUrl, hd: "1" }).toString(),
+            signal: AbortSignal.timeout(8000),
+          });
+          const text = await tikRes.text();
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed.code === 0 && parsed.data) {
+              tikData = parsed.data;
+              break;
+            }
+          } catch {}
+        } catch (endpointErr: any) {
+          console.warn(`[/api/social] TikWM error at ${endpoint}:`, endpointErr?.message);
+        }
+      }
 
-          const videoFormats: any[] = [];
-          if (hdUrl) {
-            videoFormats.push({
-              itag: "hd_no_watermark",
-              qualityLabel: "1080p Full HD (No Watermark)",
-              height: 1080,
-              container: "mp4",
-              url: hdUrl,
-              contentLength: String(d.hd_size || d.size || Math.round(durationSec * 3500000 / 8)),
-              requiresMerge: false,
-              isDirectCdn: true,
-              badge: "No Watermark",
-            });
-          }
+      if (tikData) {
+        const d = tikData;
+        const title = d.title || "TikTok Video";
+        const thumbnail = d.cover || d.origin_cover || "";
+        const uploader = d.author?.nickname || d.author?.unique_id || "TikTok Creator";
+        const durationSec = d.duration || 30;
+        const duration = formatDuration(durationSec);
 
-          if (playUrl) {
-            videoFormats.push({
-              itag: "sd_no_watermark",
-              qualityLabel: "Original Quality (No Watermark)",
-              height: 720,
-              container: "mp4",
-              url: playUrl,
-              contentLength: String(d.size || Math.round(durationSec * 2000000 / 8)),
-              requiresMerge: false,
-              isDirectCdn: true,
-              badge: "Clean MP4",
-            });
-          }
+        const hdUrl = d.hdplay ? (d.hdplay.startsWith("http") ? d.hdplay : `https://www.tikwm.com${d.hdplay}`) : null;
+        const playUrl = d.play ? (d.play.startsWith("http") ? d.play : `https://www.tikwm.com${d.play}`) : null;
+        const wmUrl = d.wmplay ? (d.wmplay.startsWith("http") ? d.wmplay : `https://www.tikwm.com${d.wmplay}`) : null;
+        const musicUrl = d.music ? (d.music.startsWith("http") ? d.music : `https://www.tikwm.com${d.music}`) : (playUrl || mediaUrl);
 
-          if (wmUrl) {
-            videoFormats.push({
-              itag: "with_watermark",
-              qualityLabel: "Original (With Watermark)",
-              height: 720,
-              container: "mp4",
-              url: wmUrl,
-              contentLength: String(d.wm_size || d.size || Math.round(durationSec * 1800000 / 8)),
-              requiresMerge: false,
-              isDirectCdn: true,
-              badge: "Watermarked",
-            });
-          }
+        const videoFormats: any[] = [];
+        if (hdUrl) {
+          videoFormats.push({
+            itag: "hd_no_watermark",
+            qualityLabel: "1080p Full HD (No Watermark)",
+            height: 1080,
+            container: "mp4",
+            url: hdUrl,
+            contentLength: String(d.hd_size || d.size || Math.round(durationSec * 3500000 / 8)),
+            requiresMerge: false,
+            isDirectCdn: true,
+            badge: "No Watermark",
+          });
+        }
 
+        if (playUrl) {
+          videoFormats.push({
+            itag: "sd_no_watermark",
+            qualityLabel: "Original Quality (No Watermark)",
+            height: 720,
+            container: "mp4",
+            url: playUrl,
+            contentLength: String(d.size || Math.round(durationSec * 2000000 / 8)),
+            requiresMerge: false,
+            isDirectCdn: true,
+            badge: "Clean MP4",
+          });
+        }
+
+        if (wmUrl) {
+          videoFormats.push({
+            itag: "with_watermark",
+            qualityLabel: "Original (With Watermark)",
+            height: 720,
+            container: "mp4",
+            url: wmUrl,
+            contentLength: String(d.wm_size || d.size || Math.round(durationSec * 1800000 / 8)),
+            requiresMerge: false,
+            isDirectCdn: true,
+            badge: "Watermarked",
+          });
+        }
+
+        if (videoFormats.length > 0) {
           return NextResponse.json({
             platform: "tiktok",
             title,
@@ -164,8 +186,6 @@ export async function POST(req: NextRequest) {
             },
           });
         }
-      } catch (tikErr: any) {
-        console.warn("[/api/social] TikWM error, falling back to yt-dlp:", tikErr?.message);
       }
     }
 

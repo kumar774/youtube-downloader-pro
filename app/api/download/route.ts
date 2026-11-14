@@ -85,16 +85,19 @@ export async function GET(req: NextRequest) {
     if (reqRange) {
       fetchHeaders["Range"] = reqRange;
     }
+    if (directCdnUrl.includes("tiktok") || directCdnUrl.includes("musically")) {
+      fetchHeaders["Referer"] = "https://www.tiktok.com/";
+    }
 
     const response = await fetch(directCdnUrl, {
       headers: fetchHeaders,
     });
 
     if (!response.ok && response.status !== 206) {
-      return NextResponse.json(
-        { error: `Failed to fetch video stream from CDN. Status: ${response.status}` },
-        { status: 500 }
-      );
+      console.warn(`[/api/download] Proxy stream fetch received ${response.status} from CDN. Falling back to direct 302 redirect.`);
+      // Never return JSON to an <a download> file link, because the browser downloads the JSON error as a .json file!
+      // Instead, redirect directly to the CDN URL so the user's browser fetches from their client IP:
+      return NextResponse.redirect(directCdnUrl, 302);
     }
 
     const contentType = ext === "webm" ? "video/webm" : ext === "m4a" ? "audio/mp4" : ext === "mp3" ? "audio/mpeg" : "video/mp4";

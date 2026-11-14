@@ -10,6 +10,29 @@ export async function GET(req: NextRequest) {
   const targetUrl = searchParams.get("url") || "https://www.youtube.com/watch?v=PbC3J_PK3oU";
   const mode = searchParams.get("mode");
 
+  if (mode === "tiktok") {
+    try {
+      const start = Date.now();
+      const tikRes = await fetch("https://www.tikwm.com/api/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        },
+        body: new URLSearchParams({ url: targetUrl, hd: "1" }).toString(),
+      });
+      const text = await tikRes.text();
+      return NextResponse.json({
+        status: tikRes.status,
+        headers: Object.fromEntries(tikRes.headers.entries()),
+        elapsedMs: Date.now() - start,
+        bodyPreview: text.substring(0, 500),
+      });
+    } catch (e: any) {
+      return NextResponse.json({ error: e.message, stack: e.stack }, { status: 500 });
+    }
+  }
+
   if (mode === "invidious") {
     try {
       const match = targetUrl.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([A-Za-z0-9_-]{11})/);
