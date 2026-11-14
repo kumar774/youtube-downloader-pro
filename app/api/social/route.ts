@@ -257,13 +257,17 @@ export async function POST(req: NextRequest) {
         else h = 720;
       }
 
+      // Dynamic resolution calculation for both horizontal (16:9) and vertical (9:16 reels/shorts)
+      // For vertical videos (e.g. 1080x1920), the true quality standard is the width (1080p)
+      const trueRes = (w > 0 && h > 0) ? Math.min(w, h) : h;
+
       let label = "";
-      if (h >= 2160) label = "4K Ultra HD";
-      else if (h >= 1440) label = "1440p 2K QHD";
-      else if (h >= 1080) label = "1080p Full HD";
-      else if (h >= 720) label = "720p HD";
-      else if (h >= 480) label = "480p SD";
-      else label = `${h}p`;
+      if (trueRes >= 2160) label = "4K Ultra HD";
+      else if (trueRes >= 1440) label = "1440p 2K QHD";
+      else if (trueRes >= 1080) label = "1080p Full HD";
+      else if (trueRes >= 720) label = "720p HD";
+      else if (trueRes >= 480) label = "480p SD";
+      else label = `${trueRes}p`;
 
       const hasAudioNatively = f.acodec !== "none" && (f.acodec !== undefined || fid === "hd" || fid === "sd");
       const requiresMerge = !hasAudioNatively && !!bestAudioFormat;
