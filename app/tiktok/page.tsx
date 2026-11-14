@@ -57,6 +57,13 @@ function formatSize(bytesStr?: string) {
   return `${mb.toFixed(1)} MB`;
 }
 
+function formatDuration(seconds: number): string {
+  if (!seconds || isNaN(seconds)) return "00:00";
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+}
+
 export default function TikTokPage() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -80,16 +87,100 @@ export default function TikTokPage() {
     setResult(null);
 
     try {
-      const res = await fetch("/api/social", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: cleanUrl, platform: "tiktok" }),
-      });
+      let data: any = null;
 
-      const data = await res.json();
-      if (!res.ok) {
-        showToast(data.error || "Failed to fetch TikTok video.", "error");
-        return;
+      // 1. Direct client-side resolution via TikWM (Bypasses server IP/Cloudflare blocks, instant & unwatermarked)
+      try {
+        const tikRes = await fetch("https://www.tikwm.com/api/", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ url: cleanUrl, hd: "1" }).toString(),
+        });
+        const tikJson = await tikRes.json();
+        if (tikJson.code === 0 && tikJson.data) {
+          const d = tikJson.data;
+          const hdUrl = d.hdplay ? (d.hdplay.startsWith("http") ? d.hdplay : `https://www.tikwm.com${d.hdplay}`) : null;
+          const playUrl = d.play ? (d.play.startsWith("http") ? d.play : `https://www.tikwm.com${d.play}`) : null;
+          const wmUrl = d.wmplay ? (d.wmplay.startsWith("http") ? d.wmplay : `https://www.tikwm.com${d.wmplay}`) : null;
+          const musicUrl = d.music ? (d.music.startsWith("http") ? d.music : `https://www.tikwm.com${d.music}`) : (playUrl || cleanUrl);
+
+          const videoFormats: any[] = [];
+          if (hdUrl) {
+            videoFormats.push({
+              itag: "hd_no_watermark",
+              qualityLabel: "1080p Full HD (No Watermark)",
+              height: 1080,
+              container: "mp4",
+              url: hdUrl,
+              contentLength: String(d.hd_size || d.size || 5000000),
+              requiresMerge: false,
+              isDirectCdn: true,
+              badge: "No Watermark",
+            });
+          }
+          if (playUrl) {
+            videoFormats.push({
+              itag: "sd_no_watermark",
+              qualityLabel: "Original Quality (No Watermark)",
+              height: 720,
+              container: "mp4",
+              url: playUrl,
+              contentLength: String(d.size || 3000000),
+              requiresMerge: false,
+              isDirectCdn: true,
+              badge: "Clean MP4",
+            });
+          }
+          if (wmUrl) {
+            videoFormats.push({
+              itag: "with_watermark",
+              qualityLabel: "Original (With Watermark)",
+              height: 720,
+              container: "mp4",
+              url: wmUrl,
+              contentLength: String(d.wm_size || d.size || 2500000),
+              requiresMerge: false,
+              isDirectCdn: true,
+              badge: "Watermarked",
+            });
+          }
+
+          if (videoFormats.length > 0) {
+            data = {
+              platform: "tiktok",
+              title: d.title || "TikTok Video",
+              thumbnail: d.cover || d.origin_cover || "",
+              uploader: d.author?.nickname || d.author?.unique_id || "TikTok Creator",
+              duration: formatDuration(d.duration || 30),
+              durationSeconds: d.duration || 30,
+              videoUrl: cleanUrl,
+              videoFormats,
+              bestVideo: videoFormats[0],
+              bestAudio: {
+                url: musicUrl,
+                qualityLabel: d.music_info?.title ? `MP3 · ${d.music_info.title}` : "MP3 Audio Track (Original Sound)",
+                container: "mp3",
+                contentLength: String(Math.round((d.duration || 30) * 320000 / 8)),
+              },
+            };
+          }
+        }
+      } catch (clientErr) {
+        console.warn("Client TikWM fetch skipped, falling back to server:", clientErr);
+      }
+
+      // 2. Server fallback if client direct fetch didn't resolve
+      if (!data) {
+        const res = await fetch("/api/social", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: cleanUrl, platform: "tiktok" }),
+        });
+        data = await res.json();
+        if (!res.ok) {
+          showToast(data.error || "Failed to fetch TikTok video.", "error");
+          return;
+        }
       }
 
       setResult(data as TikTokResult);
