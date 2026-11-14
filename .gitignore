@@ -44,3 +44,4 @@ cookies.txt
 *.tsbuildinfo
 next-env.d.ts
 .playwright-mcp/
+*.zip

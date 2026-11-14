@@ -122,49 +122,85 @@ export async function POST(req: NextRequest) {
 
     const formats: any[] = rawInfo.formats || [];
 
-    // 1. Strictly prioritize formats that have BOTH Video AND Audio (Guarantees sound in downloaded file)
-    // In Facebook & Instagram, progressive MP4s have acodec/vcodec as undefined or valid codec,
-    // whereas silent video-only DASH streams have acodec === 'none'.
-    const validVideoFormats = formats.filter((f: any) => {
-      if (!f.url) return false;
-      if (f.vcodec === "none") return false;
-      if (f.acodec === "none") return false;
-      const fid = String(f.format_id || "").toLowerCase();
-      if (fid.includes("dash_video") || fid.includes("video_only")) return false;
-      return true;
-    });
-
-    // Fallback: any video format if no dual-stream found
-    const finalCandidates = validVideoFormats.length > 0
-      ? validVideoFormats
-      : formats.filter((f: any) => f.url && f.vcodec !== "none");
-
-    // Sort strictly by highest quality score (HD 1080p > 720p > SD 480p)
-    finalCandidates.sort((a: any, b: any) => formatQualityScore(b) - formatQualityScore(a));
-
-    // Best video stream (Guaranteed to be highest quality WITH clear audio)
-    const bestVideoFormat = finalCandidates[0];
-
-    // Find best audio stream (for separate MP3 download option)
+    // 1. Find best audio stream (for separate audio download or merging with DASH video)
     const audioFormats = formats.filter((f: any) => f.url && f.vcodec === "none" && f.acodec !== "none");
     audioFormats.sort((a: any, b: any) => (b.abr || b.tbr || 0) - (a.abr || a.tbr || 0));
-    const bestAudioFormat = audioFormats[0] || bestVideoFormat;
+    const bestAudioFormat = audioFormats[0] || formats.find((f: any) => f.url && f.acodec && f.acodec !== "none");
 
-    // Check if format needs server merge (only if video-only and separate audio exists)
-    const isVideoOnly = bestVideoFormat?.acodec === "none";
-    const requiresMerge = isVideoOnly && !!bestAudioFormat && bestAudioFormat !== bestVideoFormat;
+    // 2. Identify all valid video candidates (both DASH video-only and progressive video+audio)
+    const videoCandidates = formats.filter((f: any) => f.url && f.vcodec !== "none");
+    const candidates = videoCandidates.length > 0
+      ? videoCandidates
+      : formats.filter((f: any) => f.url && f.acodec !== f.format_id);
 
-    // Determine accurate height and quality label
-    let detectedHeight = bestVideoFormat?.height || 0;
-    if (!detectedHeight) {
-      const fid = String(bestVideoFormat?.format_id || "").toLowerCase();
-      if (fid.includes("hd")) detectedHeight = 1080;
-      else if (fid.includes("sd")) detectedHeight = 480;
-      else detectedHeight = 1080;
+    const candidateMap = new Map<string, any>();
+
+    for (const f of candidates) {
+      let h = typeof f.height === "number" ? f.height : 0;
+      let w = typeof f.width === "number" ? f.width : 0;
+      const fid = String(f.format_id || "").toLowerCase();
+      const fnote = String(f.format_note || "").toLowerCase();
+
+      if (!h) {
+        if (fid === "hd" || fnote.includes("hd") || fid.includes("1080")) h = 1080;
+        else if (fid.includes("720")) h = 720;
+        else if (fid === "sd" || fnote.includes("sd") || fid.includes("480")) h = 480;
+        else h = 720;
+      }
+
+      let label = "";
+      if (h >= 2160) label = "4K Ultra HD";
+      else if (h >= 1440) label = "1440p 2K QHD";
+      else if (h >= 1080) label = "1080p Full HD";
+      else if (h >= 720) label = "720p HD";
+      else if (h >= 480) label = "480p SD";
+      else label = `${h}p`;
+
+      const hasAudioNatively = f.acodec !== "none" && (f.acodec !== undefined || fid === "hd" || fid === "sd");
+      const requiresMerge = !hasAudioNatively && !!bestAudioFormat;
+      const audioUrl = requiresMerge ? bestAudioFormat.url : undefined;
+
+      const size = f.filesize || f.filesize_approx || Math.round(durationSeconds * (h >= 1080 ? 4500000 : h >= 720 ? 2500000 : 1000000) / 8);
+
+      const entry = {
+        itag: f.format_id || label,
+        qualityLabel: label,
+        height: h,
+        width: w,
+        container: f.ext || "mp4",
+        url: f.url,
+        contentLength: String(size),
+        requiresMerge,
+        audioStreamUrl: audioUrl,
+        isDirectCdn: !requiresMerge,
+      };
+
+      if (!candidateMap.has(label)) {
+        candidateMap.set(label, entry);
+      } else {
+        const existing = candidateMap.get(label);
+        // Prefer native audio if available, else prefer higher filesize
+        if (!entry.requiresMerge && existing.requiresMerge) {
+          candidateMap.set(label, entry);
+        } else if (parseInt(entry.contentLength) > parseInt(existing.contentLength)) {
+          candidateMap.set(label, entry);
+        }
+      }
     }
-    const qualityLabel = detectedHeight >= 1080 ? `${detectedHeight}p Full HD` : detectedHeight >= 720 ? `${detectedHeight}p HD` : `${detectedHeight}p`;
 
-    const videoSize = bestVideoFormat?.filesize || bestVideoFormat?.filesize_approx || (durationSeconds * (detectedHeight >= 1080 ? 4500000 : 2000000) / 8);
+    // Sort descending by height (1080p first, then 720p, 480p, etc.)
+    const videoFormats = Array.from(candidateMap.values()).sort((a, b) => b.height - a.height);
+    const bestVideoFormat = videoFormats[0] || {
+      itag: "hd",
+      qualityLabel: "1080p Full HD",
+      height: 1080,
+      container: "mp4",
+      url: mediaUrl,
+      contentLength: String(Math.round(durationSeconds * 4500000 / 8)),
+      requiresMerge: false,
+      isDirectCdn: true,
+    };
+
     const audioSize = bestAudioFormat?.filesize || bestAudioFormat?.filesize_approx || (durationSeconds * 320000 / 8);
 
     return NextResponse.json({
@@ -175,18 +211,10 @@ export async function POST(req: NextRequest) {
       duration,
       durationSeconds,
       videoUrl: mediaUrl,
-      bestVideo: {
-        url: bestVideoFormat?.url || mediaUrl,
-        qualityLabel: qualityLabel,
-        height: detectedHeight,
-        container: bestVideoFormat?.ext || "mp4",
-        contentLength: String(Math.round(videoSize)),
-        requiresMerge: requiresMerge,
-        audioStreamUrl: requiresMerge ? bestAudioFormat?.url : undefined,
-        isDirectCdn: !requiresMerge,
-      },
+      videoFormats,
+      bestVideo: bestVideoFormat,
       bestAudio: {
-        url: bestAudioFormat?.url || mediaUrl,
+        url: bestAudioFormat?.url || bestVideoFormat.url,
         qualityLabel: "MP3 Studio HD (320 kbps)",
         container: "mp3",
         contentLength: String(Math.round(audioSize)),

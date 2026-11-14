@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from "react";
 import Header from "../components/Header";
+import DownloadProgressModal from "../components/DownloadProgressModal";
 import {
   Instagram,
   Download,
@@ -13,8 +14,21 @@ import {
   Clock,
   User,
   ShieldCheck,
-  CheckCircle2,
+  Sparkles,
 } from "lucide-react";
+
+interface SocialVideoFormat {
+  itag: string;
+  qualityLabel: string;
+  height: number;
+  width?: number;
+  container: string;
+  url: string;
+  contentLength: string;
+  requiresMerge: boolean;
+  audioStreamUrl?: string;
+  isDirectCdn: boolean;
+}
 
 interface SocialMediaResult {
   platform: string;
@@ -24,16 +38,8 @@ interface SocialMediaResult {
   duration: string;
   durationSeconds?: number;
   videoUrl: string;
-  bestVideo: {
-    url: string;
-    qualityLabel: string;
-    height: number;
-    container: string;
-    contentLength: string;
-    requiresMerge?: boolean;
-    audioStreamUrl?: string;
-    isDirectCdn?: boolean;
-  };
+  videoFormats?: SocialVideoFormat[];
+  bestVideo: SocialVideoFormat;
   bestAudio: {
     url: string;
     qualityLabel: string;
@@ -55,6 +61,14 @@ export default function InstagramPage() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SocialMediaResult | null>(null);
+  const [activeJob, setActiveJob] = useState<{
+    jobId: string;
+    title: string;
+    thumbnail?: string;
+    qualityLabel?: string;
+    totalSizeText?: string;
+  } | null>(null);
+  const [startingJob, setStartingJob] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "error" | "success" } | null>(null);
 
   const showToast = useCallback((message: string, type: "error" | "success" = "error") => {
@@ -95,6 +109,57 @@ export default function InstagramPage() {
     }
   };
 
+  const handleStartMerge = async (format: SocialVideoFormat) => {
+    if (!result || startingJob) return;
+    setStartingJob(true);
+
+    try {
+      const res = await fetch("/api/job/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: result.videoUrl,
+          videoStreamUrl: format.url,
+          audioStreamUrl: format.audioStreamUrl,
+          contentLength: format.contentLength,
+          title: result.title,
+          artist: result.uploader,
+          format: "bestvideo+bestaudio/best",
+          type: "merge",
+          thumbnail: result.thumbnail,
+          qualityLabel: format.qualityLabel,
+          durationSeconds: result.durationSeconds,
+          turbo: true,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.jobId) {
+        setActiveJob({
+          jobId: data.jobId,
+          title: result.title,
+          thumbnail: result.thumbnail,
+          qualityLabel: format.qualityLabel,
+          totalSizeText: formatSize(format.contentLength),
+        });
+      } else {
+        showToast(data.error || "Failed to start download job", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to start download job", "error");
+    } finally {
+      setStartingJob(false);
+    }
+  };
+
+  const displayFormats: SocialVideoFormat[] =
+    result?.videoFormats && result.videoFormats.length > 0
+      ? result.videoFormats
+      : result
+      ? [result.bestVideo]
+      : [];
+
   return (
     <>
       <Header />
@@ -115,7 +180,7 @@ export default function InstagramPage() {
             in Original HD
           </h1>
           <p className="mx-auto max-w-2xl text-xs sm:text-base text-slate-400 mb-8">
-            Paste any Instagram Reel, Post, or IGTV URL to save full HD MP4 video or extract the audio directly at maximum CDN speed.
+            Paste any Instagram Reel or Post to download in crisp original 1080p Full HD with sound, or extract the audio track directly.
           </p>
 
           {/* Input Box */}
@@ -148,7 +213,7 @@ export default function InstagramPage() {
           {/* Speed Badge */}
           <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-pink-500/10 border border-pink-500/20 text-[11px] font-semibold text-pink-300">
             <Zap className="h-3 w-3 text-pink-400 fill-pink-400" />
-            <span>Direct 1-Click Browser Save · Full 20–50 MB/s CDN Speed · 0 Server Wait</span>
+            <span>Highest Quality 1080p Support · Lossless Audio Sync · Fast Browser Save</span>
           </div>
         </section>
 
@@ -180,73 +245,122 @@ export default function InstagramPage() {
                     </p>
                   </div>
 
-                  {/* 2 Clear 1-Click Direct Download Options */}
-                  <div className="mt-6 flex flex-col gap-3">
-                    {/* Option 1: Highest Video MP4 */}
-                    <a
-                      href={`/api/download?url=${encodeURIComponent(result.bestVideo.url)}&title=${encodeURIComponent(result.title)}&ext=mp4`}
-                      download
-                      className="flex items-center justify-between rounded-xl bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 p-3.5 sm:p-4 font-bold text-white shadow-lg shadow-pink-500/25 hover:scale-[1.01] active:scale-[0.98] transition-all min-w-0 group"
-                    >
-                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-                        <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-white/20 shrink-0">
-                          <Film className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                        </div>
-                        <div className="text-left min-w-0 flex-1">
-                          <div className="text-xs sm:text-sm font-extrabold flex flex-wrap items-center gap-1.5 sm:gap-2">
-                            <span>Download Full HD Reel (MP4)</span>
-                            <span className="rounded bg-white/20 px-1.5 py-0.2 text-[9px] sm:text-[10px] uppercase">
-                              {result.bestVideo.qualityLabel}
-                            </span>
-                            {result.bestVideo.contentLength && (
-                              <span className="rounded bg-white/10 px-1.5 py-0.2 text-[9px] text-pink-100">
-                                {formatSize(result.bestVideo.contentLength)}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[11px] sm:text-xs text-pink-200 block truncate">
-                            ⚡ Instant 1-Click Browser Save · Full CDN Speed
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 rounded-lg bg-white/15 px-2.5 py-1.5 text-xs font-bold shrink-0 ml-2 group-hover:bg-white/25 transition-colors">
-                        <Download className="h-4 w-4" />
-                        <span className="hidden sm:inline">Save</span>
-                      </div>
-                    </a>
+                  {/* Section 1: Video Formats by Quality */}
+                  <div className="mt-6 flex flex-col gap-2.5">
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-300 pb-1 border-b border-white/5">
+                      <span className="flex items-center gap-1.5 text-pink-400 uppercase tracking-wider text-[11px] font-bold">
+                        <Film className="h-3.5 w-3.5" />
+                        Available Video Qualities
+                      </span>
+                      <span className="text-[10px] text-slate-400">MP4 Format</span>
+                    </div>
 
-                    {/* Option 2: Separate Audio MP3 */}
-                    <a
-                      href={`/api/download?url=${encodeURIComponent(result.bestAudio.url)}&title=${encodeURIComponent(result.title)}&ext=mp3`}
-                      download
-                      className="flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-950/40 p-3.5 sm:p-4 font-bold text-white hover:bg-purple-900/50 hover:border-purple-500/50 transition-all min-w-0 group"
-                    >
-                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-                        <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-purple-500/20 text-purple-300 shrink-0">
-                          <Music className="h-4 w-4 sm:h-5 sm:w-5" />
-                        </div>
-                        <div className="text-left min-w-0 flex-1">
-                          <div className="text-xs sm:text-sm font-extrabold flex flex-wrap items-center gap-1.5 sm:gap-2">
-                            <span>Download Audio Track (MP3)</span>
-                            <span className="rounded bg-purple-500/30 text-purple-300 px-1.5 py-0.2 text-[9px] sm:text-[10px] uppercase font-bold">
-                              320 kbps
-                            </span>
-                            {result.bestAudio.contentLength && (
-                              <span className="rounded bg-purple-500/20 px-1.5 py-0.2 text-[9px] text-purple-200">
-                                {formatSize(result.bestAudio.contentLength)}
+                    {displayFormats.map((f, idx) => {
+                      const isHighTier = f.height >= 1080;
+                      return (
+                        <div
+                          key={`ig-fmt-${idx}`}
+                          className="flex items-center justify-between gap-2.5 rounded-xl border border-white/5 bg-white/[0.02] p-2.5 sm:p-3 hover:border-white/15 hover:bg-white/[0.04] transition-all"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div
+                              className={`flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg font-bold text-xs shrink-0 ${
+                                isHighTier
+                                  ? "bg-pink-500/20 text-pink-300 border border-pink-500/30"
+                                  : "bg-slate-800 text-slate-300"
+                              }`}
+                            >
+                              <Film className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-xs sm:text-sm font-bold text-white">
+                                  {f.qualityLabel}
+                                </span>
+                                {isHighTier && (
+                                  <span className="rounded bg-pink-500/20 text-pink-300 px-1.5 py-0.2 text-[9px] uppercase font-bold border border-pink-500/30">
+                                    Original HD
+                                  </span>
+                                )}
+                                {f.contentLength && (
+                                  <span className="text-[10px] text-slate-400 font-mono">
+                                    {formatSize(f.contentLength)}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] sm:text-[11px] text-slate-400 block truncate">
+                                {f.requiresMerge
+                                  ? "🎬 Auto-merged with crystal-clear audio"
+                                  : "⚡ Instant 1-Click Fast Save"}
                               </span>
-                            )}
+                            </div>
                           </div>
-                          <span className="text-[11px] sm:text-xs text-slate-400 block truncate">
-                            ⚡ Instant 1-Click Audio Save
-                          </span>
+
+                          {f.requiresMerge ? (
+                            <button
+                              onClick={() => handleStartMerge(f)}
+                              disabled={startingJob}
+                              className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 px-3 py-2 text-xs font-bold text-white shadow-md shadow-pink-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 disabled:opacity-50"
+                            >
+                              <Sparkles className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">Merge & Download</span>
+                              <span className="sm:hidden">Download</span>
+                            </button>
+                          ) : (
+                            <a
+                              href={`/api/download?url=${encodeURIComponent(f.url)}&title=${encodeURIComponent(result.title)}&ext=mp4`}
+                              download
+                              className="flex items-center gap-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-3 py-2 text-xs font-bold hover:bg-emerald-500/30 transition-all shrink-0"
+                            >
+                              <Download className="h-3.5 w-3.5 text-emerald-400" />
+                              <span className="hidden sm:inline">Fast 1-Click</span>
+                              <span className="sm:hidden">Fast</span>
+                            </a>
+                          )}
                         </div>
+                      );
+                    })}
+
+                    {/* Section 2: Separate Audio Section */}
+                    <div className="mt-2 pt-2 border-t border-white/5">
+                      <div className="flex items-center justify-between text-xs font-semibold text-slate-300 pb-1.5">
+                        <span className="flex items-center gap-1.5 text-purple-400 uppercase tracking-wider text-[11px] font-bold">
+                          <Music className="h-3.5 w-3.5" />
+                          Audio Track (Sound Only)
+                        </span>
+                        <span className="text-[10px] text-purple-300 font-mono">MP3 320 kbps</span>
                       </div>
-                      <div className="flex items-center gap-1.5 rounded-lg bg-purple-500/20 text-purple-300 px-2.5 py-1.5 text-xs font-bold shrink-0 ml-2 group-hover:bg-purple-500/30 transition-colors">
-                        <Download className="h-4 w-4" />
-                        <span className="hidden sm:inline">Save</span>
-                      </div>
-                    </a>
+
+                      <a
+                        href={`/api/download?url=${encodeURIComponent(result.bestAudio.url)}&title=${encodeURIComponent(result.title)}&ext=mp3`}
+                        download
+                        className="flex items-center justify-between gap-2.5 rounded-xl border border-purple-500/30 bg-purple-950/30 p-2.5 sm:p-3 hover:bg-purple-900/40 hover:border-purple-500/50 transition-all group"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-purple-500/20 text-purple-300 shrink-0">
+                            <Music className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs sm:text-sm font-bold text-white">
+                                Audio Track (MP3)
+                              </span>
+                              <span className="rounded bg-purple-500/30 text-purple-200 px-1.5 py-0.2 text-[9px] font-bold uppercase">
+                                Studio HD
+                              </span>
+                            </div>
+                            <span className="text-[10px] sm:text-[11px] text-purple-300/70 block truncate">
+                              🎵 High-bitrate audio track · Fast 1-Click Download
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 rounded-lg bg-purple-500/20 text-purple-200 px-3 py-1.5 text-xs font-bold shrink-0 group-hover:bg-purple-500/30 transition-colors">
+                          <Download className="h-3.5 w-3.5" />
+                          <span>Save MP3</span>
+                        </div>
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -261,9 +375,9 @@ export default function InstagramPage() {
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-pink-500/10 text-pink-400 mb-4">
                 <Film className="h-6 w-6" />
               </div>
-              <h3 className="font-bold text-white mb-2">Reels & Videos</h3>
+              <h3 className="font-bold text-white mb-2">Original Full HD 1080p</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Save Instagram Reels, video posts, and IGTV clips in original high definition.
+                Lossless audio-video synchronization guarantees original 1080p clarity with crystal-clear sound.
               </p>
             </div>
 
@@ -281,14 +395,26 @@ export default function InstagramPage() {
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 mb-4">
                 <ShieldCheck className="h-6 w-6" />
               </div>
-              <h3 className="font-bold text-white mb-2">Instant 1-Click Save</h3>
+              <h3 className="font-bold text-white mb-2">All Quality Tiers</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Direct browser download straight from Meta CDN at 20-50 MB/s speed.
+                Select any resolution from Full HD down to standard mobile formats with instant 1-click downloads.
               </p>
             </div>
           </div>
         </section>
       </main>
+
+      {/* Progress Modal */}
+      {activeJob && (
+        <DownloadProgressModal
+          jobId={activeJob.jobId}
+          title={activeJob.title}
+          thumbnail={activeJob.thumbnail}
+          qualityLabel={activeJob.qualityLabel}
+          totalSizeText={activeJob.totalSizeText}
+          onClose={() => setActiveJob(null)}
+        />
+      )}
 
       {/* Toast notification */}
       {toast && (
